@@ -1,0 +1,350 @@
+{
+  "type": "FeatureCollection",
+  "name": "iran_oil_gas",
+  "metadata": {
+    "schema": "facilities.schema.json",
+    "generator": "scripts/bootstrap_facilities.py",
+    "methodology_version": "v1.0",
+    "coordinate_notes": "Centroids are rounded to ~3 decimal degrees (~110 m) deliberately. Sub-100m precision triggers the dual-use review checklist (CLAUDE.md §Sensitive Areas). Polygons are coarse bounding rectangles approximating publicly-visible plant boundaries; replace with surveyed footprints during editorial review.",
+    "sources": [
+      "https://globalenergymonitor.org/projects/global-oil-gas-plant-tracker/",
+      "https://ceobs.org/the-wisen-tool/",
+      "https://www.openstreetmap.org/"
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "092c58ef-2fd0-5747-b28a-453e1fd2eb05",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [51.429, 35.584],
+          [51.439, 35.584],
+          [51.439, 35.594],
+          [51.429, 35.594],
+          [51.429, 35.584]
+        ]]
+      },
+      "properties": {
+        "name": "Tehran Refinery (Shahr-e Rey)",
+        "facility_type": "REFINERY",
+        "country": "IRN",
+        "capacity_barrels": 250000,
+        "capacity_uncertainty_pct": 15.0,
+        "operator": "NIORDC — Tehran Oil Refining Company",
+        "source_url": "https://en.wikipedia.org/wiki/Tehran_Oil_Refining_Company",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Capacity is throughput in bpd. Polygon is an approximate bounding rectangle around the publicly-visible main process area; storage tanks to the north are captured by the separate Shahr-e Rey storage entry."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "aee91525-9bed-543e-9629-65e8c986d914",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [51.439, 35.596],
+          [51.449, 35.596],
+          [51.449, 35.606],
+          [51.439, 35.606],
+          [51.439, 35.596]
+        ]]
+      },
+      "properties": {
+        "name": "Shahr-e Rey storage depot",
+        "facility_type": "STORAGE_TANK_FARM",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIOPDC",
+        "source_url": "https://globalenergymonitor.org/projects/global-oil-gas-plant-tracker/",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Product storage tank farm adjacent to the Tehran Refinery. Tank-by-tank inventory is not publicly catalogued; capacity left null pending editorial review."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "011d2644-0a76-57a2-aa1b-6788cf2f5bae",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [51.310, 35.781]
+      },
+      "properties": {
+        "name": "Shahran fuel depot",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIOPDC",
+        "source_url": "https://en.wikipedia.org/wiki/Shahran",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Major fuel distribution depot in northwest Tehran. Footprint not captured — stored as centroid pending OSM enrichment."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "9a839156-a557-519e-865e-afe43b3aa1eb",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [51.493, 35.785]
+      },
+      "properties": {
+        "name": "Aghdasieh fuel depot",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIOPDC",
+        "source_url": "https://en.wikipedia.org/wiki/Aghdasieh",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Fuel storage depot in northeast Tehran. Footprint not captured — stored as centroid pending OSM enrichment."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "093604b8-bc31-5851-9dc2-3e709990e634",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [50.992, 35.738]
+      },
+      "properties": {
+        "name": "Fardis (Karaj) fuel depot",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIOPDC",
+        "source_url": "https://en.wikipedia.org/wiki/Fardis",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Petroleum products depot serving the Karaj metro area west of Tehran. Centroid only."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "5a3694b6-1c95-5f5f-9c0b-e8bafea949d7",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [56.177, 27.193],
+          [56.190, 27.193],
+          [56.190, 27.205],
+          [56.177, 27.205],
+          [56.177, 27.193]
+        ]]
+      },
+      "properties": {
+        "name": "Bandar Abbas Refinery",
+        "facility_type": "REFINERY",
+        "country": "IRN",
+        "capacity_barrels": 330000,
+        "capacity_uncertainty_pct": 15.0,
+        "operator": "Persian Gulf Star Oil Company / NIORDC",
+        "source_url": "https://en.wikipedia.org/wiki/Bandar_Abbas_Refinery",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Combined throughput of the main NIORDC refinery and the adjacent Persian Gulf Star condensate complex. Polygon is a coarse bounding rectangle."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "db1b4268-cc77-5dfe-aed5-632e2b4d8c9d",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [56.215, 27.130]
+      },
+      "properties": {
+        "name": "Bandar Abbas naval base",
+        "facility_type": "STORAGE_TANK_FARM",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "IRGN — Islamic Republic of Iran Navy",
+        "source_url": "https://en.wikipedia.org/wiki/Bandar_Abbas",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Naval bunker fuel storage. Included because military fuel depots are within V1 scope when struck and observed burning; combat operations themselves are out of scope."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "c9e9436d-d772-55ff-9b61-3ad63035b0f2",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [53.361, 26.810],
+          [53.371, 26.810],
+          [53.371, 26.818],
+          [53.361, 26.818],
+          [53.361, 26.810]
+        ]]
+      },
+      "properties": {
+        "name": "Lavan Island Refinery",
+        "facility_type": "REFINERY",
+        "country": "IRN",
+        "capacity_barrels": 55000,
+        "capacity_uncertainty_pct": 20.0,
+        "operator": "Lavan Oil Refining Company / NIORDC",
+        "source_url": "https://en.wikipedia.org/wiki/Lavan_Island",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Co-located with Lavan Island export terminal. Polygon covers refinery only; terminal infrastructure is on the south coast of the island and not separately catalogued."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "0b218b40-476c-5b21-8bc0-a2432dc91f8c",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [50.310, 29.226],
+          [50.328, 29.226],
+          [50.328, 29.240],
+          [50.310, 29.240],
+          [50.310, 29.226]
+        ]]
+      },
+      "properties": {
+        "name": "Kharg Island crude export terminal",
+        "facility_type": "TANKER_TERMINAL",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIOC — National Iranian Oil Company",
+        "source_url": "https://en.wikipedia.org/wiki/Kharg_Island",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Iran's primary crude export terminal; handles the majority of seaborne exports. Polygon covers the main storage tank farm on the eastern side of the island."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "8843a899-5960-5efd-bcfc-41629dc08856",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [35.034, 32.783],
+          [35.047, 32.783],
+          [35.047, 32.794],
+          [35.034, 32.794],
+          [35.034, 32.783]
+        ]]
+      },
+      "properties": {
+        "name": "Haifa Refineries (Bazan)",
+        "facility_type": "REFINERY",
+        "country": "ISR",
+        "capacity_barrels": 197000,
+        "capacity_uncertainty_pct": 10.0,
+        "operator": "Bazan Group",
+        "source_url": "https://en.wikipedia.org/wiki/Oil_Refineries_Ltd",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Largest refinery complex in Israel. Polygon covers the main refining area in Haifa Bay; the petrochemical complex to the south-east is treated separately when added."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bf5dafbd-6eef-5ebf-848e-c58ef9992c46",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [34.640, 31.766],
+          [34.652, 31.766],
+          [34.652, 31.775],
+          [34.640, 31.775],
+          [34.640, 31.766]
+        ]]
+      },
+      "properties": {
+        "name": "Ashdod Refinery (Paz)",
+        "facility_type": "REFINERY",
+        "country": "ISR",
+        "capacity_barrels": 120000,
+        "capacity_uncertainty_pct": 10.0,
+        "operator": "Paz Oil Company",
+        "source_url": "https://en.wikipedia.org/wiki/Paz_Oil_Company",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Second of Israel's two crude refineries. Coarse bounding polygon."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "c5144660-b954-516b-9fde-b2f92fc4f734",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [50.610, 26.152],
+          [50.624, 26.152],
+          [50.624, 26.164],
+          [50.610, 26.164],
+          [50.610, 26.152]
+        ]]
+      },
+      "properties": {
+        "name": "BAPCO Sitra Refinery",
+        "facility_type": "REFINERY",
+        "country": "BHR",
+        "capacity_barrels": 267000,
+        "capacity_uncertainty_pct": 10.0,
+        "operator": "Bahrain Petroleum Company (BAPCO)",
+        "source_url": "https://en.wikipedia.org/wiki/Bahrain_Petroleum_Company",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Included per CEOBS WISEN public list of Gulf-state critical infrastructure. Bahrain's only oil refinery."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "5e4ff769-f8c2-5404-a8a5-0d2ecd5b4e8c",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [51.535, 25.900],
+          [51.565, 25.900],
+          [51.565, 25.925],
+          [51.535, 25.925],
+          [51.535, 25.900]
+        ]]
+      },
+      "properties": {
+        "name": "Ras Laffan Industrial City",
+        "facility_type": "GAS_PROCESSING",
+        "country": "QAT",
+        "capacity_barrels": null,
+        "operator": "QatarEnergy",
+        "source_url": "https://en.wikipedia.org/wiki/Ras_Laffan_Industrial_City",
+        "added_at": "2026-05-23T00:00:00Z",
+        "added_by": "scripts/bootstrap_facilities.py",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Aggregated entry for the Ras Laffan LNG / GTL / gas processing complex. Capacity in barrels is not the natural unit for an LNG hub; left null pending the natural-gas emission factor (deferred per CLAUDE.md). Polygon is a coarse bounding rectangle around the industrial city perimeter."
+      }
+    }
+  ]
+}

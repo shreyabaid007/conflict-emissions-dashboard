@@ -1,0 +1,32 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://firms.modaps.eosdis.nasa.gov/api/area/csv/TESTKEY/VIIRS_SNPP_NRT/50.0,32.0,52.0,34.0/1/2026-03-15
+  response:
+    body:
+      string: 'Service Unavailable'
+    headers:
+      content-type:
+      - text/plain
+    status:
+      code: 503
+      message: Service Unavailable
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://firms.modaps.eosdis.nasa.gov/api/area/csv/TESTKEY/VIIRS_SNPP_NRT/50.0,32.0,52.0,34.0/1/2026-03-15
+  response:
+    body:
+      string: |
+        latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight
+        32.6643,51.6783,325.4,0.39,0.36,2026-03-15,0823,N,VIIRS,n,2.0NRT,295.1,15.7,D
+    headers:
+      content-type:
+      - text/csv; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

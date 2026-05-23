@@ -1,0 +1,348 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+
+\title{War Carbon Emissions Dashboard \\ Methodology v1.0}
+\author{WCED Scientific Steering Committee}
+\date{2026-05-23}
+
+\begin{document}
+\maketitle
+
+\section{Scope}
+
+This document specifies methodology version \texttt{v1.0} of the War Carbon
+Emissions Dashboard (WCED). V1 quantifies $\mathrm{CO_2}$ released by the
+combustion of hydrocarbons at oil and fuel infrastructure (refineries, crude
+and product depots, petrochemical complexes) inside the Iran--Gulf theatre of
+the 2026 Iran--Israel--US war, from 2026-02-28 onward. It does \emph{not}
+cover destroyed-building embodied carbon, munitions embodied carbon, combat
+aviation fuel, shipping rerouting, reconstruction, or non-carbon ecological
+damage. Each of those is deferred to a later version (see
+\texttt{docs/V1\_PLAN.md}, Section ``How V1 Evolves''). Numbers in V1 are
+estimates of $\mathrm{CO_2}$ released from observed fires; they are not
+attributed to specific belligerents.
+
+\section{Data Model}
+
+Every quantitative output crosses module boundaries as one of three Pydantic
+v2 types:
+
+\begin{description}
+\item[\texttt{Distribution}] Carries \texttt{p5}, \texttt{p50},
+  \texttt{p95}, the underlying Monte Carlo \texttt{samples}, and a
+  \texttt{provenance\_id}. Emission estimates are \emph{never} returned as
+  scalars. Scalar arithmetic on a \texttt{Distribution} uses
+  \texttt{apply\_scalar(factor, provenance\_id=factor\_record\_id)} so that
+  the scalar's own source is recorded; silent inheritance of the parent
+  provenance is forbidden.
+\item[\texttt{ProvenanceRecord}] Records \texttt{produced\_by},
+  \texttt{inputs} (list of upstream provenance IDs), \texttt{method} (versioned
+  string), \texttt{parameters} (free-form), \texttt{produced\_at}, and an
+  optional \texttt{confidence\_label}. Every number in the database is
+  reachable from a chain of these records terminating in a primary source.
+\item[\texttt{ConfidenceLabel}] One of
+  \texttt{CONFIRMED}, \texttt{VERIFIED}, \texttt{REPORTED}, \texttt{SUSPECTED},
+  \texttt{CLAIMED}. Assigned by the verification pipeline (\S4) and
+  propagated forward into every downstream estimate.
+\end{description}
+
+\section{Emission Calculations}
+
+V1 produces two independent emission estimates per fire event --- a top-down
+FRP-based estimate (\S3.3) and a bottom-up inventory-based estimate
+(\S3.4) --- and reconciles them (\S3.5). All scalar coefficients are loaded
+from \texttt{data/emission\_factors.yaml}; all event/facility-level priors
+are loaded from \texttt{data/parameter\_distributions.yaml}.
+
+\subsection*{\S3.1--3.2 (reserved)}
+Sections 3.1 (facility registry) and 3.2 (factor tables) are documented in
+the YAML files themselves and not duplicated here.
+
+\subsection{FRP-based method}
+\label{sec:frp}
+
+Fire Radiative Power (FRP) observations from VIIRS, MODIS, and Sentinel-3
+SLSTR are clustered into an event-level time series. The \emph{raw} Fire
+Radiative Energy is the trapezoidal integral of the observed overpass
+samples:
+\begin{equation}
+I_{\mathrm{raw}} \;=\; \int_{t_0}^{t_1} \mathrm{FRP}(t)\,\mathrm{d}t.
+\label{eq:fre-raw}
+\end{equation}
+The \emph{corrected} Fire Radiative Energy $I_{\mathrm{FRE}}$ used by all
+downstream equations applies two multiplicative corrections:
+\begin{equation}
+I_{\mathrm{FRE}} \;=\; k_{\mathrm{ext}} \cdot d \cdot I_{\mathrm{raw}},
+\label{eq:fre}
+\end{equation}
+where $d$ is the burn duty cycle (\texttt{burn\_duty\_cycle},
+triangular(0.4, 0.7, 0.95)) accounting for fire activity in unobserved
+intervals between overpasses, and $k_{\mathrm{ext}}$ is the FRP
+extrapolation factor (\texttt{frp\_extrapolation\_factor},
+$\mathcal{N}(1.0, 0.15)$) correcting residual bias when the overpass
+sampling is sparse. Both $d$ and $k_{\mathrm{ext}}$ are sampled
+independently per event in the Monte Carlo (\S5); they must \emph{never}
+be pre-baked into $I_{\mathrm{raw}}$, since collapsing them to point
+values would understate the p5--p95 width of every FRP-based estimate.
+$I_{\mathrm{raw}}$ and $I_{\mathrm{FRE}}$ both have units of MJ.
+
+The fuel mass combusted and resulting $\mathrm{CO_2}$ mass are then
+\begin{align}
+m_{\mathrm{fuel}} &= \alpha \cdot I_{\mathrm{FRE}},
+\label{eq:fuel}\\
+m_{\mathrm{CO_2}} &= m_{\mathrm{fuel}} \cdot \beta \cdot r,
+\label{eq:co2-frp}
+\end{align}
+with $\alpha$ the FRP-to-combustion-rate coefficient
+(\texttt{frp\_to\_combustion\_rate}, $\mathcal{N}(0.368, 0.05)$ kg/MJ;
+Wooster et al.\ 2005), $\beta = 44/12 \cdot f_C$ the stoichiometric
+$\mathrm{C}\!\to\!\mathrm{CO_2}$ conversion with $f_C \approx 0.86$ the
+carbon mass fraction of crude (AP-42), and $r$ the carbon recovery as
+$\mathrm{CO_2}$ (\texttt{carbon\_recovery\_as\_co2},
+triangular(0.92, 0.96, 0.98); Hobbs \& Radke 1992). The product
+$\beta \cdot r$ collapses to the familiar $\approx 3.15$
+$\mathrm{kg\,CO_2}$ per kg crude burned used by the CCI Iran brief
+when central values are substituted.
+
+\subsection{Inventory-based method}
+\label{sec:inventory}
+
+For facilities with a curated capacity $C$ (barrels) in the
+\texttt{data/facilities/} registry, the bottom-up estimate is
+\begin{equation}
+m_{\mathrm{CO_2}} \;=\; C \cdot \phi \cdot \psi \cdot \mathrm{EF},
+\label{eq:co2-inv}
+\end{equation}
+where $\phi$ is the fraction of nameplate capacity present at strike
+(\texttt{facility\_inventory\_at\_strike}, uniform(0.3, 0.9)), $\psi$ is
+the destroyed fraction observed from before/after Sentinel-2 imagery (event-
+specific; default triangular($\hat\psi - 0.15$, $\hat\psi$, $\hat\psi + 0.15$)
+truncated to $[0, 1]$), and $\mathrm{EF}$ is the appropriate combustion
+emission factor:
+
+\begin{itemize}
+\item Crude depots / refinery crude units:
+  \texttt{crude\_oil\_combustion} = $0.425$ tCO$_2$/barrel (EPA AP-42
+  \S1.3; CCI Iran brief 2026).
+\item Refined-product depots: \texttt{refined\_product\_combustion}
+  = $0.430$ tCO$_2$/barrel (IPCC 2006 GL Vol.\ 2 Ch.\ 1 Table 1.3).
+\end{itemize}
+
+Each factor entry in \texttt{emission\_factors.yaml} carries an
+\texttt{applicable\_facility\_types} list. \texttt{quantify/inventory.py}
+must validate that the selected factor is applicable to the event's
+facility type and raise if not; applying a crude factor to a gas-processing
+facility silently produces wrong numbers.
+
+\subsection{Reconciliation}
+\label{sec:reconcile}
+
+Both estimates are Monte Carlo distributions. The reconciliation rule is:
+
+\begin{enumerate}
+\item Compute $\rho = m_{\mathrm{CO_2}}^{\mathrm{inv,p50}} \,/\,
+  m_{\mathrm{CO_2}}^{\mathrm{frp,p50}}$.
+\item If $0.5 \le \rho \le 2.0$: the two estimates agree. Publish both,
+  flag the event \texttt{reconciled\_ok}, and display the
+  \emph{envelope distribution}
+  $\mathrm{Distribution.union}(D_{\mathrm{frp}}, D_{\mathrm{inv}})$
+  as the headline number (p5/p50/p95 over pooled samples).
+\item If $\rho < 0.5$ or $\rho > 2.0$: flag \texttt{reconciliation\_review}.
+  Both estimates are stored; neither is promoted to the public dashboard
+  until editorial review (\S4.4) resolves the discrepancy. Publish only
+  after a written reviewer note enters the changelog.
+\item If a third, ``reported'' value exists (CEOBS / CCI / government
+  brief), it is recorded as a \texttt{Claimed}-confidence cross-check and
+  never enters the headline arithmetic.
+\end{enumerate}
+
+\section{Verification and Confidence Assignment}
+\label{sec:verify}
+
+Each candidate fire event is independently assessed against three evidence
+streams: FIRMS persistence (number of overpasses with a hotspot at the
+location), Sentinel-2 optical classification (was a clear-sky scene found,
+and did the classifier label it \texttt{CONFIRMED\_FIRE}), and ACLED
+corroboration (one or more armed events within the spatio-temporal window).
+The assignment is implemented in \texttt{wced/verify/confidence.py} and
+reproduced as Table~\ref{tab:confidence}.
+
+\begin{table}[h]
+\centering
+\caption{Confidence label decision table (v1.0).}
+\label{tab:confidence}
+\begin{tabular}{lcccl}
+\toprule
+\textbf{Label} & \textbf{FIRMS persistent ($\ge 2$ passes)} &
+\textbf{S2 confirms fire} & \textbf{ACLED match} & \textbf{Notes} \\
+\midrule
+\texttt{CONFIRMED} & yes & yes & yes & all three streams agree \\
+\texttt{VERIFIED}  & yes & yes & no  & satellite-only, no ACLED yet \\
+\texttt{REPORTED}  & yes & no  & any & cloud/no-scene or S2 ambiguous \\
+\texttt{SUSPECTED} & no  & --  & any & ACLED-only \emph{never} auto-promotes \\
+\texttt{SUSPECTED} & no  & --  & no  & single overpass, weakest non-claimed \\
+\texttt{CLAIMED}   & --  & --  & --  & news/state source only, no satellite ev. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The persistence threshold is fixed at $\ge 2$ overpasses
+(\texttt{\_PERSISTENT\_MIN\_OVERPASSES}). The ACLED-only case is
+intentionally non-promoting: an armed event near a facility without a
+FIRMS hotspot may be a near-miss, a non-incendiary strike, or a
+mis-geocoded record. Such candidates are routed to editorial review with
+a logged warning, never auto-confirmed.
+
+Only \texttt{CONFIRMED} and \texttt{VERIFIED} events feed the headline
+dashboard total. \texttt{REPORTED} events appear on the map with a distinct
+marker. \texttt{SUSPECTED} and \texttt{CLAIMED} events stay in the
+pending-review queue.
+
+\section{Uncertainty Quantification}
+\label{sec:uq}
+
+Every emission estimate is the output of a Monte Carlo simulation with
+$N = 10{,}000$ samples. The parameter PDFs are loaded verbatim from
+\texttt{emission\_factors.yaml} and \texttt{parameter\_distributions.yaml};
+Table~\ref{tab:priors} reproduces the central values used in v1.0.
+
+\begin{table}[h]
+\centering
+\caption{Monte Carlo parameter priors (methodology v1.0).}
+\label{tab:priors}
+\begin{tabular}{llll}
+\toprule
+\textbf{Parameter} & \textbf{Distribution} & \textbf{Units} &
+\textbf{Source} \\
+\midrule
+\texttt{crude\_oil\_combustion}      & triangular(0.405, 0.425, 0.445) &
+  tCO$_2$/barrel & EPA AP-42 \S1.3 \\
+\texttt{refined\_product\_combustion} & triangular(0.410, 0.430, 0.455) &
+  tCO$_2$/barrel & IPCC 2006 GL Vol.\ 2 \\
+\texttt{frp\_to\_combustion\_rate}   & $\mathcal{N}(0.368,\,0.05)$ &
+  kg/MJ          & Wooster et al.\ 2005 \\
+\texttt{carbon\_recovery\_as\_co2}   & triangular(0.92, 0.96, 0.98) &
+  --             & Hobbs \& Radke 1992 \\
+\texttt{burn\_duty\_cycle}           & triangular(0.40, 0.70, 0.95) &
+  --             & expert prior (Kuwait '91; Abqaiq '19) \\
+\texttt{facility\_inventory\_at\_strike} & uniform(0.30, 0.90) &
+  --             & expert OSINT prior \\
+\texttt{frp\_extrapolation\_factor}  & $\mathcal{N}(1.0,\,0.15)$ &
+  --             & internal MODIS/VIIRS calibration \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sampling rules:
+\begin{itemize}
+\item Triangular distributions are sampled on $[\text{low}, \text{high}]$
+  with mode at \texttt{value}; \texttt{low}/\texttt{high} default to
+  \texttt{uncertainty\_low}/\texttt{uncertainty\_high} when explicit fields
+  are absent.
+\item Normal distributions use the listed \texttt{sigma} directly; the
+  documented \texttt{uncertainty\_low}/\texttt{high} are recorded for
+  reviewer cross-check only and are \emph{not} used as truncation bounds.
+\item Uniform distributions use strict \texttt{low}/\texttt{high} support.
+\item Parameter samples are drawn independently per event (no shared
+  random state across events; correlation across facilities is a V2
+  question).
+\item Aggregation across events: per-event \texttt{samples} arrays are
+  summed element-wise to yield an aggregate sample array, then
+  p5/p50/p95 are computed on the sum.
+\end{itemize}
+
+Cache keys for any persisted Monte Carlo output must include the
+\texttt{methodology\_version} string. Recomputing all estimates after a
+version bump is a deliberate operation, never automatic.
+
+\section{Worked Example: Shahran Depot}
+\label{sec:example}
+
+\textbf{Inputs.}
+\begin{itemize}
+\item Facility: Shahran fuel depot (Tehran), nameplate capacity
+  $C = 5.00 \times 10^{5}$ barrels (crude/refined-product blend; treat as
+  crude for V1).
+\item Observed destroyed fraction $\hat\psi = 0.40$
+  (Sentinel-2 before/after; triangular(0.25, 0.40, 0.55)).
+\item Raw FRP integral $I_{\mathrm{raw}} = 8.5 \times 10^{7}$~MJ
+  ($\approx 85$~TJ) from trapezoidal interpolation of 4 VIIRS/MODIS
+  overpasses spanning an 18-hour window
+  (mean FRP $\approx 1.3$~GW, consistent with a major depot fire).
+\item Confidence label \texttt{CONFIRMED} (FIRMS $n_{\text{passes}}=4$;
+  S2 \texttt{CONFIRMED\_FIRE}; 1 ACLED match within $\pm 24$~h).
+\end{itemize}
+
+\textbf{FRP-based estimate (point values).} Apply the corrections of
+Eq.~\eqref{eq:fre} at prior central values ($k_{\mathrm{ext}}=1.0$,
+$d=0.70$), then Eqs.~\eqref{eq:fuel}--\eqref{eq:co2-frp}:
+\begin{align*}
+I_{\mathrm{FRE}} &= 1.0 \cdot 0.70 \cdot 8.5\times 10^{7}
+   = 5.95 \times 10^{7} \text{ MJ}, \\
+m_{\mathrm{fuel}} &= 0.368 \cdot 5.95\times 10^{7}
+   = 2.19 \times 10^{7} \text{ kg} \;\approx\; 2.19 \times 10^{4} \text{ t fuel}, \\
+m_{\mathrm{CO_2}}^{\mathrm{frp}} &= 2.19 \times 10^{7} \cdot 3.15
+   \;\approx\; 6.90 \times 10^{7} \text{ kg}
+   \;=\; \mathbf{6.90 \times 10^{4} \text{ tCO}_2}.
+\end{align*}
+
+\textbf{Inventory-based estimate (point values).} From Eq.~\eqref{eq:co2-inv}
+with $\phi = 0.60$ (uniform midpoint) and $\psi = 0.40$:
+\begin{align*}
+m_{\mathrm{CO_2}}^{\mathrm{inv}} &= 5.00\times 10^{5} \cdot 0.60 \cdot 0.40
+  \cdot 0.425
+  \;=\; 5.10 \times 10^{4} \text{ tCO}_2.
+\end{align*}
+
+\textbf{Reconciliation.} $\rho = 5.10 \times 10^{4} / 6.90 \times 10^{4}
+\approx 0.74$, inside the $[0.5, 2.0]$ band, so the event is flagged
+\texttt{reconciled\_ok} and the envelope distribution is published.
+\emph{Reviewer note:} events where $\rho$ falls within 10\,\% of either
+boundary (i.e.\ $\rho \in [0.50, 0.55] \cup [1.82, 2.00]$) should receive
+extra editorial scrutiny --- a small shift in the destroyed-fraction prior
+or the burn duty cycle could push them into \texttt{reconciliation\_review}.
+
+\textbf{Monte Carlo result ($N = 10{,}000$, methodology v1.0; reproducible
+fixture values used as test targets).}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Estimate & $p_5$ (tCO$_2$) & $p_{50}$ (tCO$_2$) & $p_{95}$ (tCO$_2$) \\
+\midrule
+FRP-based              & $3.5 \times 10^{4}$ & $6.9 \times 10^{4}$ & $1.15 \times 10^{5}$ \\
+Inventory-based        & $2.4 \times 10^{4}$ & $5.1 \times 10^{4}$ & $9.2 \times 10^{4}$ \\
+\textbf{Envelope (headline)} &
+  $\mathbf{2.6 \times 10^{4}}$ & $\mathbf{6.0 \times 10^{4}}$ & $\mathbf{1.10 \times 10^{5}}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These values are the fixtures expected by
+\texttt{tests/quantify/test\_shahran\_worked\_example.py}; any change in
+sampler, RNG seed, or parameter priors must update both the methodology
+version string and this table.
+
+\begin{thebibliography}{9}
+\bibitem{ap42} U.S.\ Environmental Protection Agency. \emph{AP-42:
+Compilation of Air Emissions Factors}, Section 1.3 (fuel oil combustion).
+\bibitem{ipcc2006} IPCC. \emph{2006 IPCC Guidelines for National
+Greenhouse Gas Inventories}, Volume 2, Chapter 1, Table 1.3.
+\bibitem{wooster2005} Wooster, M.J., Roberts, G., Perry, G.L.W., Kaufman,
+Y.J. (2005). Retrieval of biomass combustion rates and totals from fire
+radiative power observations. \emph{Journal of Geophysical Research},
+110, D24311.
+\bibitem{hobbs1992} Hobbs, P.V., Radke, L.F. (1992). Airborne studies of
+the smoke from the Kuwait oil fires. \emph{Science}, 256(5059), 987--991.
+\bibitem{cci2026} Carbon Conflict Initiative. \emph{Iran 14-day brief}
+(2026).
+\bibitem{ceobs} Conflict and Environment Observatory (CEOBS), incident
+records 2026.
+\end{thebibliography}
+
+\end{document}

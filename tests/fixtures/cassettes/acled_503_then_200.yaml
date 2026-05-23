@@ -1,0 +1,47 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: POST
+    uri: https://acleddata.com/oauth/token
+  response:
+    body:
+      string: '{"access_token":"test-access-token","refresh_token":"test-refresh-token","expires_in":86400,"token_type":"Bearer"}'
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://acleddata.com/api/acled/read
+  response:
+    body:
+      string: 'Service Unavailable'
+    headers:
+      content-type:
+      - text/plain
+    status:
+      code: 503
+      message: Service Unavailable
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://acleddata.com/api/acled/read
+  response:
+    body:
+      string: >
+        {"status":200,"success":true,"count":1,"data":[
+          {"event_id_cnty":"IRN5023","event_date":"2026-03-15","event_type":"Explosions/Remote violence","sub_event_type":"Air/drone strike","actor1":"Military Forces of Israel (2024-)","actor2":"Government of Iran","country":"Iran","location":"Isfahan","latitude":"32.6601","longitude":"51.6860","source":"Tehran Times","notes":"Air strikes targeted oil refinery northeast of Isfahan.","fatalities":"0","timestamp":"1742090880","iso":"364"}
+        ]}
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

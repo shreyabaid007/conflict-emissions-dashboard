@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:14.284743Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "c9e9436d-d772-55ff-9b61-3ad63035b0f2",
+    "name": "Lavan Island Refinery",
+    "facility_type": "REFINERY",
+    "country": "IRN",
+    "capacity_barrels": 55000.0,
+    "operator": "Lavan Oil Refining Company / NIORDC",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((53.361 26.81,53.371 26.81,53.371 26.818,53.361 26.818,53.361 26.81))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

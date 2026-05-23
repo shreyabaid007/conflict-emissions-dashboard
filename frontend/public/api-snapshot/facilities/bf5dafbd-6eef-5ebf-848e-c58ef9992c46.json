@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:05.069215Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "bf5dafbd-6eef-5ebf-848e-c58ef9992c46",
+    "name": "Ashdod Refinery (Paz)",
+    "facility_type": "REFINERY",
+    "country": "ISR",
+    "capacity_barrels": 120000.0,
+    "operator": "Paz Oil Company",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((34.64 31.766,34.652 31.766,34.652 31.775,34.64 31.775,34.64 31.766))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

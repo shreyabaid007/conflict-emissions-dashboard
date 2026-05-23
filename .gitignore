@@ -1,0 +1,89 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.python-version
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Data cache (never commit raw satellite data)
+data/cache/
+data/raw/
+data/firms_cache/
+*.tif
+*.geotiff
+*.nc
+*.h5
+*.hdf5
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Type checking
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env*.local
+
+# Outputs (generated, not committed)
+outputs/
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# IDEs
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# Prefect
+.prefect/
+
+# Docker
+*.log
+
+# Internal planning docs (not for public release)
+docs/PROMPTS.md
+docs/WCED_execution_plan_v2.md
+docs/V2_GAP_REPORT.md
+
+# Build / runtime junk
+.next/
+.vercel/
+frontend/test-results/
+.claude/scheduled_tasks.lock
+
+# Media artifacts (demo videos/gifs)
+*.mp4
+*.gif

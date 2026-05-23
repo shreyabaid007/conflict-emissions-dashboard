@@ -1,0 +1,30 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: POST
+    uri: https://acleddata.com/oauth/token
+  response:
+    body:
+      string: '{"access_token":"test-access-token","refresh_token":"test-refresh-token","expires_in":86400,"token_type":"Bearer"}'
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://acleddata.com/api/acled/read
+  response:
+    body:
+      string: '{"status":200,"success":true,"count":0,"data":[]}'
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

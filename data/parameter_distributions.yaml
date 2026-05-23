@@ -1,0 +1,65 @@
+# WCED Monte Carlo parameters — methodology v1.0
+#
+# This file holds the prior distributions for event- and facility-level
+# parameters that do not have a single defensible point value. They are
+# distinct from emission_factors.yaml in two ways:
+#
+#   1. Factors are scalars with global validity (e.g. tCO2 per barrel of
+#      crude oil — measurable in a lab). Parameters here are modelling
+#      assumptions whose true value depends on the specific event or
+#      facility (e.g. what fraction of an overpass-to-overpass window was
+#      the fire actually burning).
+#   2. Factors are tightly bibliographic. Parameters here may be informed
+#      by expert judgement and analogous historical events; the prior is
+#      always wider than for an emission factor of comparable magnitude.
+#
+# The schema is identical to emission_factors.yaml so the same loader and
+# Pydantic model can validate both files. See wced/quantify/factors.py.
+#
+# Editing any prior here is a methodology change and requires a version
+# bump in methodology/v1.0.pdf.
+
+factors:
+
+  burn_duty_cycle:
+    value: 0.7
+    distribution: triangular
+    low: 0.4
+    mode: 0.7
+    high: 0.95
+    units: dimensionless
+    source: >
+      Expert prior; calibrated against persistent oil-fire telemetry from
+      Kuwait 1991 (Hobbs & Radke 1992) and the 2019 Abqaiq incident.
+    methodology_section: "4.1.2"
+    notes: >
+      Fraction of the elapsed time between detected_at and last_seen_at
+      during which the fire was actively burning. Cloud cover and
+      overpass gaps mean we never observe continuously.
+
+  facility_inventory_at_strike:
+    value: 0.6
+    distribution: uniform
+    low: 0.3
+    high: 0.9
+    units: dimensionless
+    source: "Expert prior; OSINT review of pre-strike depot fill levels"
+    methodology_section: "4.2.1"
+    notes: >
+      Fraction of nameplate capacity actually present at the moment of
+      ignition. Wide uniform prior reflects deep uncertainty for most
+      facilities outside well-monitored major refineries.
+
+  frp_extrapolation_factor:
+    value: 1.0
+    distribution: normal
+    sigma: 0.15
+    uncertainty_low: 0.85
+    uncertainty_high: 1.15
+    units: dimensionless
+    source: "Internal calibration against MODIS-VIIRS overpass pairs, 2024 dataset"
+    methodology_section: "4.3.1"
+    notes: >
+      Multiplicative correction applied when integrating sparse FRP
+      observations across overpass gaps. Centered at 1.0 (no bias);
+      sigma reflects scatter in the calibration set.

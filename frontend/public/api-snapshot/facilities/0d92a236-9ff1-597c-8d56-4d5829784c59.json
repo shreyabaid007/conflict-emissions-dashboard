@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:00.144324Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "0d92a236-9ff1-597c-8d56-4d5829784c59",
+    "name": "Abadan Refinery",
+    "facility_type": "REFINERY",
+    "country": "IRN",
+    "capacity_barrels": 400000.0,
+    "operator": "NIORDC \u2014 Abadan Oil Refining Company",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(48.28 30.35)",
+  "event_count": 2,
+  "total_p50_tco2e": 239.88335958136904
+}

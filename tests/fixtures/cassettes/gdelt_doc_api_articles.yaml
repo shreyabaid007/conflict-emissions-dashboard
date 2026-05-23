@@ -1,0 +1,21 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://api.gdeltproject.org/api/v2/doc/doc
+  response:
+    body:
+      string: >
+        {"articles":[
+          {"url":"https://www.reuters.com/world/middle-east/explosion-isfahan-refinery-2026-03-15/","title":"Explosion reported at Isfahan oil refinery after airstrike","seendate":"20260315T120000Z","domain":"reuters.com","sourcecountylat":"32.6601","sourcecountylon":"51.6860","tone":"-5.2","sharingimage_maxlinks":"12"},
+          {"url":"https://www.aljazeera.com/news/2026/3/15/bandar-abbas-fuel-depot-hit","title":"Bandar Abbas fuel depot struck in overnight raid","seendate":"20260315T080000Z","domain":"aljazeera.com","sourcecountylat":"27.1832","sourcecountylon":"56.2766","tone":"-6.1","sharingimage_maxlinks":"8"},
+          {"url":"https://iranintl.com/en/202603150345","title":"Fire at Ahvaz petrochemical complex following armed clash","seendate":"20260315T150000Z","domain":"iranintl.com","sourcecountylat":"31.3183","sourcecountylon":"48.6706","tone":"-4.8","sharingimage_maxlinks":"5"}
+        ]}
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

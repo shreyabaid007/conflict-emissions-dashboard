@@ -1,0 +1,67 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json",
+    "https://stac-extensions.github.io/projection/v1.0.0/schema.json"
+  ],
+  "id": "S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947",
+  "collection": "sentinel-2-l2a",
+  "bbox": [51.0, 32.0, 52.0, 33.0],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[[51.0, 32.0], [52.0, 32.0], [52.0, 33.0], [51.0, 33.0], [51.0, 32.0]]]
+  },
+  "properties": {
+    "datetime": "2026-03-15T07:36:11Z",
+    "eo:cloud_cover": 12.3,
+    "platform": "Sentinel-2A",
+    "instruments": ["MSI"],
+    "constellation": "sentinel-2",
+    "proj:epsg": 32639,
+    "s2:mgrs_tile": "39RVK",
+    "s2:processing_baseline": "05.10"
+  },
+  "assets": {
+    "B04": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/15/S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947.SAFE/GRANULE/B04.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Red - 10m",
+      "eo:bands": [{"name": "B04", "common_name": "red", "center_wavelength": 0.665}],
+      "roles": ["data"]
+    },
+    "B03": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/15/S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947.SAFE/GRANULE/B03.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Green - 10m",
+      "eo:bands": [{"name": "B03", "common_name": "green", "center_wavelength": 0.56}],
+      "roles": ["data"]
+    },
+    "B02": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/15/S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947.SAFE/GRANULE/B02.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Blue - 10m",
+      "eo:bands": [{"name": "B02", "common_name": "blue", "center_wavelength": 0.49}],
+      "roles": ["data"]
+    },
+    "B12": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/15/S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947.SAFE/GRANULE/B12.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "SWIR 2.2μm - 20m",
+      "eo:bands": [{"name": "B12", "common_name": "swir22", "center_wavelength": 2.19}],
+      "roles": ["data"]
+    }
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a/items/S2A_MSIL2A_20260315T073611_N0510_R135_T39RVK_20260315T113947",
+      "type": "application/json"
+    },
+    {
+      "rel": "collection",
+      "href": "https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a",
+      "type": "application/json"
+    }
+  ]
+}

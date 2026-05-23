@@ -1,0 +1,102 @@
+# WCED emission factors — methodology v1.0
+#
+# Every quantification step in wced/quantify/ pulls its scalar coefficients
+# from this file. Editing values here is a methodology change: bump
+# methodology_version in the methodology PDF and regenerate downstream
+# estimates with a fresh provenance trail.
+#
+# Field reference (per factor entry)
+# ----------------------------------
+#   value                : float — central estimate (mean for normal,
+#                          mode for triangular, point for constant)
+#   units                : str   — physical unit string used by callers
+#   source               : str   — origin citation; must trace to a paper,
+#                          standard, or report archived in our methodology
+#                          bibliography
+#   methodology_section  : str   — section number in methodology/v1.0.pdf
+#                          where this factor is justified
+#   distribution         : str   — one of {triangular, normal, uniform,
+#                          constant}. Optional; defaults to triangular when
+#                          uncertainty_low/uncertainty_high are provided.
+#
+# Distribution-specific fields (only the ones for the chosen distribution
+# are required; others may be present for documentation):
+#   triangular : low, mode, high   — strict support; mode defaults to
+#                                     value; low/high default to
+#                                     uncertainty_low/uncertainty_high
+#   normal     : sigma             — standard deviation (linear units)
+#   uniform    : low, high         — strict support
+#   constant   : (none)            — point value with zero uncertainty
+#
+# Documentation fields (always optional, never used for sampling — they
+# record the source paper's reported confidence range so reviewers can
+# cross-check the chosen distribution parameters):
+#   uncertainty_low      : float   — source-reported lower bound
+#   uncertainty_high     : float   — source-reported upper bound
+#   notes                : str     — caveats, calibration history
+
+factors:
+
+  crude_oil_combustion:
+    value: 0.425
+    uncertainty_low: 0.405
+    uncertainty_high: 0.445
+    units: tCO2_per_barrel
+    source: "EPA AP-42 Section 1.3; consistent with CCI Iran brief 2026"
+    methodology_section: "3.2.1"
+    applicable_facility_types:
+      - REFINERY
+      - OIL_DEPOT
+      - STORAGE_TANK_FARM
+      - TANKER_TERMINAL
+      - OFFSHORE_PLATFORM
+    # No explicit distribution → defaults to triangular with
+    # (low, mode, high) = (uncertainty_low, value, uncertainty_high).
+
+  frp_to_combustion_rate:
+    value: 0.368
+    uncertainty_low: 0.318
+    uncertainty_high: 0.418
+    distribution: normal
+    sigma: 0.05
+    units: kg_per_MJ
+    source: "Wooster et al. 2005 JGR D24311; calibrated for hydrocarbon fires"
+    methodology_section: "3.3.2"
+    notes: >
+      uncertainty_low/uncertainty_high record Wooster et al.'s reported
+      ±1σ envelope. Sampling uses sigma directly; the natural 95% CI of
+      the normal is wider than the documented ±1σ range.
+
+  carbon_recovery_as_co2:
+    value: 0.96
+    distribution: triangular
+    low: 0.92
+    mode: 0.96
+    high: 0.98
+    units: dimensionless
+    source: "Hobbs & Radke 1992 Science 256:987 (Kuwait oil fires)"
+    methodology_section: "3.3.3"
+
+  refined_product_combustion:
+    value: 0.430
+    uncertainty_low: 0.410
+    uncertainty_high: 0.455
+    units: tCO2_per_barrel
+    source: "IPCC 2006 GL Vol 2 Ch 1 Table 1.3 (gasoline/diesel weighted average)"
+    methodology_section: "3.2.2"
+    applicable_facility_types:
+      - REFINERY
+      - OIL_DEPOT
+      - STORAGE_TANK_FARM
+      - TANKER_TERMINAL
+      - PETROCHEMICAL
+
+  natural_gas_combustion:
+    value: 0.234
+    uncertainty_low: 0.222
+    uncertainty_high: 0.246
+    units: tCO2_per_boe
+    source: "IPCC 2006 GL Vol 2 Ch 2 Table 2.2 (natural gas default); 56.1 tCO2/TJ × 6.12 GJ/boe × 1e-3"
+    methodology_section: "3.2.3"
+    applicable_facility_types:
+      - GAS_PROCESSING

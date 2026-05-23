@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wced.org/schemas/facilities.schema.json",
+  "title": "WCED Facility Registry GeoJSON",
+  "description": "GeoJSON FeatureCollection of oil/fuel infrastructure facilities tracked by WCED. Each Feature represents one Facility per wced.models.facility.Facility. Geometries are WGS84 (EPSG:4326).",
+  "type": "object",
+  "required": ["type", "features"],
+  "additionalProperties": false,
+  "properties": {
+    "type": {"const": "FeatureCollection"},
+    "name": {"type": "string"},
+    "metadata": {
+      "type": "object",
+      "description": "Optional collection-level metadata: generator version, run timestamp, source manifest.",
+      "additionalProperties": true
+    },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/facilityFeature"}
+    }
+  },
+  "$defs": {
+    "facilityFeature": {
+      "type": "object",
+      "required": ["type", "geometry", "properties"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"const": "Feature"},
+        "id": {"type": ["string", "integer"]},
+        "geometry": {
+          "oneOf": [
+            {"$ref": "#/$defs/pointGeometry"},
+            {"$ref": "#/$defs/polygonGeometry"}
+          ]
+        },
+        "properties": {"$ref": "#/$defs/facilityProperties"}
+      }
+    },
+    "facilityProperties": {
+      "type": "object",
+      "required": [
+        "name",
+        "facility_type",
+        "country",
+        "capacity_barrels",
+        "source_url",
+        "added_at",
+        "added_by"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "facility_type": {
+          "type": "string",
+          "description": "Must match wced.models.facility.FacilityType.",
+          "enum": [
+            "REFINERY",
+            "OIL_DEPOT",
+            "PETROCHEMICAL",
+            "GAS_PROCESSING",
+            "OFFSHORE_PLATFORM",
+            "TANKER_TERMINAL",
+            "STORAGE_TANK_FARM"
+          ]
+        },
+        "country": {
+          "type": "string",
+          "description": "ISO 3166-1 alpha-3 (three uppercase letters).",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "capacity_barrels": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Throughput (refinery) or storage (depot) capacity in barrels. Null when the source registry does not publish a figure."
+        },
+        "capacity_uncertainty_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "One-sigma symmetric uncertainty on capacity_barrels as a percentage. Defaults to 30.0 in the loader when omitted."
+        },
+        "operator": {"type": ["string", "null"]},
+        "source_url": {
+          "type": "string",
+          "minLength": 1,
+          "format": "uri",
+          "description": "URL of the registry entry or report this facility was sourced from."
+        },
+        "added_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "UTC ISO 8601 timestamp when the entry entered the registry."
+        },
+        "added_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier of the operator who added the entry (analyst handle or bootstrap script name)."
+        },
+        "gem_id": {
+          "type": ["string", "null"],
+          "description": "Identifier from Global Energy Monitor Oil & Gas Plant Tracker, when sourced from a GEM CSV row."
+        },
+        "osm_id": {
+          "type": ["string", "null"],
+          "description": "OpenStreetMap element identifier (e.g. way/12345), when sourced from Overpass."
+        },
+        "notes": {"type": ["string", "null"]}
+      }
+    },
+    "pointGeometry": {
+      "type": "object",
+      "required": ["type", "coordinates"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"const": "Point"},
+        "coordinates": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {"type": "number"}
+        }
+      }
+    },
+    "polygonGeometry": {
+      "type": "object",
+      "required": ["type", "coordinates"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {"const": "Polygon"},
+        "coordinates": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 4,
+            "description": "Linear ring: ≥4 positions with first == last.",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 3,
+              "items": {"type": "number"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

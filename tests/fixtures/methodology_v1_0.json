@@ -1,0 +1,138 @@
+{
+  "methodology_version": "1.0",
+  "source_pdf": "methodology/v1.0.pdf",
+  "worked_examples": {
+    "shahran_frp": {
+      "section": "6",
+      "facility": "Shahran Fuel Depot",
+      "location": "Tehran",
+      "inputs": {
+        "I_raw_MJ": 85000000.0,
+        "k_ext": 1.0,
+        "d": 0.7,
+        "alpha_kg_per_MJ": 0.368,
+        "f_C": 0.86,
+        "r": 0.96,
+        "beta_CO2_per_C": 3.6666666666666665
+      },
+      "point_estimate_tCO2": 69000,
+      "monte_carlo": {
+        "N": 10000,
+        "p5_tCO2": 35000,
+        "p50_tCO2": 69000,
+        "p95_tCO2": 115000
+      }
+    },
+    "shahran_inventory": {
+      "section": "6",
+      "facility": "Shahran Fuel Depot",
+      "inputs": {
+        "C_barrels": 500000,
+        "phi": 0.6,
+        "psi": 0.4,
+        "EF_tCO2_per_barrel": 0.425,
+        "fraction_destroyed_pdf": [
+          0.25,
+          0.4,
+          0.55
+        ]
+      },
+      "point_estimate_tCO2": 51000,
+      "monte_carlo": {
+        "N": 10000,
+        "p5_tCO2": 24000,
+        "p50_tCO2": 51000,
+        "p95_tCO2": 92000
+      }
+    },
+    "shahran_reconciliation": {
+      "section": "6",
+      "inputs": {
+        "frp_p50_tCO2": 69000,
+        "inventory_p50_tCO2": 51000
+      },
+      "rho": 0.7391304347826086,
+      "agreement_band": [
+        0.5,
+        2.0
+      ],
+      "reconciled_ok": true
+    }
+  },
+  "table_2_factors": {
+    "crude_oil_combustion": {
+      "value": 0.425,
+      "distribution": "triangular",
+      "params": {
+        "low": 0.405,
+        "mode": 0.425,
+        "high": 0.445
+      },
+      "units": "tCO2/barrel",
+      "source": "EPA AP-42 \u00a71.3"
+    },
+    "refined_product_combustion": {
+      "value": 0.43,
+      "distribution": "triangular",
+      "params": {
+        "low": 0.41,
+        "mode": 0.43,
+        "high": 0.455
+      },
+      "units": "tCO2/barrel",
+      "source": "IPCC 2006 GL Vol. 2"
+    },
+    "frp_to_combustion_rate": {
+      "value": 0.368,
+      "distribution": "normal",
+      "params": {
+        "mean": 0.368,
+        "sigma": 0.05
+      },
+      "units": "kg/MJ",
+      "source": "Wooster et al. 2005"
+    },
+    "carbon_recovery_as_co2": {
+      "value": 0.96,
+      "distribution": "triangular",
+      "params": {
+        "low": 0.92,
+        "mode": 0.96,
+        "high": 0.98
+      },
+      "units": "dimensionless",
+      "source": "Hobbs & Radke 1992"
+    },
+    "burn_duty_cycle": {
+      "value": 0.7,
+      "distribution": "triangular",
+      "params": {
+        "low": 0.4,
+        "mode": 0.7,
+        "high": 0.95
+      },
+      "units": "dimensionless",
+      "source": "expert prior (Kuwait '91; Abqaiq '19)"
+    },
+    "facility_inventory_at_strike": {
+      "value": 0.6,
+      "distribution": "uniform",
+      "params": {
+        "low": 0.3,
+        "high": 0.9
+      },
+      "units": "dimensionless",
+      "source": "expert OSINT prior"
+    },
+    "frp_extrapolation_factor": {
+      "value": 1.0,
+      "distribution": "normal",
+      "params": {
+        "mean": 1.0,
+        "sigma": 0.15
+      },
+      "units": "dimensionless",
+      "source": "internal MODIS/VIIRS calibration"
+    }
+  }
+}

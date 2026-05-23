@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:13.113828Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "0b218b40-476c-5b21-8bc0-a2432dc91f8c",
+    "name": "Kharg Island crude export terminal",
+    "facility_type": "TANKER_TERMINAL",
+    "country": "IRN",
+    "capacity_barrels": null,
+    "operator": "NIOC \u2014 National Iranian Oil Company",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((50.31 29.226,50.328 29.226,50.328 29.24,50.31 29.24,50.31 29.226))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

@@ -1,0 +1,35 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: POST
+    uri: https://acleddata.com/oauth/token
+  response:
+    body:
+      string: '{"access_token":"test-access-token","refresh_token":"test-refresh-token","expires_in":86400,"token_type":"Bearer"}'
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://acleddata.com/api/acled/read
+  response:
+    body:
+      string: >
+        {"status":200,"success":true,"count":3,"data":[
+          {"event_id_cnty":"IRN5023","event_date":"2026-03-15","event_type":"Explosions/Remote violence","sub_event_type":"Air/drone strike","actor1":"Military Forces of Israel (2024-)","actor2":"Government of Iran","country":"Iran","location":"Isfahan","latitude":"32.6601","longitude":"51.6860","source":"Tehran Times","notes":"Air strikes targeted oil refinery northeast of Isfahan. Multiple explosions reported.","fatalities":"0","timestamp":"1742090880","iso":"364"},
+          {"event_id_cnty":"IRN5024","event_date":"2026-03-15","event_type":"Explosions/Remote violence","sub_event_type":"Shelling/artillery/missile attack","actor1":"Military Forces of Israel (2024-)","actor2":"Government of Iran","country":"Iran","location":"Bandar Abbas","latitude":"27.1832","longitude":"56.2766","source":"Reuters","notes":"Missile strike on fuel storage depot near Bandar Abbas port.","fatalities":"2","timestamp":"1742100480","iso":"364"},
+          {"event_id_cnty":"IRN5025","event_date":"2026-03-15","event_type":"Battles","sub_event_type":"Armed clash","actor1":"Islamic Revolutionary Guard Corps","actor2":"Military Forces of Israel (2024-)","country":"Iran","location":"Ahvaz","latitude":"31.3183","longitude":"48.6706","source":"Al Jazeera","notes":"Armed exchange near Ahvaz petrochemical complex.","fatalities":"5","timestamp":"1742112000","iso":"364"}
+        ]}
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

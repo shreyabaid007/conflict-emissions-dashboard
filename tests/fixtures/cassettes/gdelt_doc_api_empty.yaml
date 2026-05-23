@@ -1,0 +1,16 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://api.gdeltproject.org/api/v2/doc/doc
+  response:
+    body:
+      string: '{"articles":[]}'
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

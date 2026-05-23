@@ -1,0 +1,56 @@
+{
+  "type": "Feature",
+  "stac_version": "1.0.0",
+  "stac_extensions": [
+    "https://stac-extensions.github.io/eo/v1.0.0/schema.json"
+  ],
+  "id": "S2B_MSIL2A_20260316T073611_N0510_R135_T39RVK_20260316T113947",
+  "collection": "sentinel-2-l2a",
+  "bbox": [51.0, 32.0, 52.0, 33.0],
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[[51.0, 32.0], [52.0, 32.0], [52.0, 33.0], [51.0, 33.0], [51.0, 32.0]]]
+  },
+  "properties": {
+    "datetime": "2026-03-16T07:36:11Z",
+    "eo:cloud_cover": 78.5,
+    "platform": "Sentinel-2B",
+    "instruments": ["MSI"],
+    "constellation": "sentinel-2",
+    "proj:epsg": 32639,
+    "s2:mgrs_tile": "39RVK"
+  },
+  "assets": {
+    "B04": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/16/B04.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Red - 10m",
+      "roles": ["data"]
+    },
+    "B03": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/16/B03.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Green - 10m",
+      "roles": ["data"]
+    },
+    "B02": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/16/B02.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "Blue - 10m",
+      "roles": ["data"]
+    },
+    "B12": {
+      "href": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/39/R/VK/2026/3/16/B12.tif",
+      "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+      "title": "SWIR 2.2μm - 20m",
+      "roles": ["data"]
+    }
+  },
+  "links": [
+    {
+      "rel": "self",
+      "href": "https://planetarycomputer.microsoft.com/api/stac/v1/collections/sentinel-2-l2a/items/S2B_MSIL2A_20260316T073611_N0510_R135_T39RVK_20260316T113947",
+      "type": "application/json"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:32:53.310950Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "total_p5": 42716.2441766964,
+  "total_p50": 75619.00638060302,
+  "total_p95": 108521.76858450964,
+  "confirmed_event_count": 47,
+  "facility_count": 20
+}

@@ -1,0 +1,97 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:35:03.626262Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "e3a86885-5324-431b-8863-42e14b5c280e",
+    "facility_id": "ef373c6a-73ce-5b11-83c8-7302de6a6502",
+    "detected_at": "2026-03-16T22:33:00Z",
+    "last_seen_at": "2026-03-18T23:35:00Z",
+    "peak_frp_mw": 5.07,
+    "total_frp_integral_mj": 562690.2,
+    "detection_source": "FIRMS_VIIRS",
+    "confidence_label": "REPORTED",
+    "status": "PUBLISHED",
+    "notes": "dist_to_facility_m=297",
+    "estimate": {
+      "id": "262fec83-68ea-4afa-b619-90cdbae3f9e5",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.5",
+      "method": "FRP",
+      "p5": 38.52311841573677,
+      "p50": 69.3783861966038,
+      "p95": 117.11347655206517,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T09:14:35.565689Z"
+    }
+  },
+  "estimates": [
+    {
+      "id": "262fec83-68ea-4afa-b619-90cdbae3f9e5",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.5",
+      "method": "FRP",
+      "p5": 38.52311841573677,
+      "p50": 69.3783861966038,
+      "p95": 117.11347655206517,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T09:14:35.565689Z"
+    },
+    {
+      "id": "672fb5dd-4192-4aaf-943b-3b411fefd6bf",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.4",
+      "method": "FRP",
+      "p5": 38.52311841573677,
+      "p50": 69.3783861966038,
+      "p95": 117.11347655206517,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T09:00:15.835431Z"
+    },
+    {
+      "id": "db721df8-fec6-40f8-b2d1-ef326937909e",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.3",
+      "method": "FRP",
+      "p5": 38.52311841573677,
+      "p50": 69.3783861966038,
+      "p95": 117.11347655206517,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T08:55:10.539735Z"
+    },
+    {
+      "id": "311acb81-2dee-4384-8377-873318e09030",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.2",
+      "method": "FRP",
+      "p5": 38.52311841573677,
+      "p50": 69.3783861966038,
+      "p95": 117.11347655206517,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T08:40:38.915963Z"
+    },
+    {
+      "id": "25955783-6977-4251-808a-a7f9152f783a",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0.1",
+      "method": "FRP",
+      "p5": 226.28139738247387,
+      "p50": 407.522516928312,
+      "p95": 687.9142244023359,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T08:08:47.177140Z"
+    },
+    {
+      "id": "95bf6e50-c6f2-4427-bb9a-a821bda55eb2",
+      "event_id": "e3a86885-5324-431b-8863-42e14b5c280e",
+      "methodology_version": "1.0",
+      "method": "FRP",
+      "p5": 226.28139738247387,
+      "p50": 407.522516928312,
+      "p95": 687.9142244023359,
+      "units": "tCO2e",
+      "created_at": "2026-05-24T07:28:17.125535Z"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:07.409968Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "5a3694b6-1c95-5f5f-9c0b-e8bafea949d7",
+    "name": "Bandar Abbas Refinery",
+    "facility_type": "REFINERY",
+    "country": "IRN",
+    "capacity_barrels": 330000.0,
+    "operator": "Persian Gulf Star Oil Company / NIORDC",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((56.177 27.193,56.19 27.193,56.19 27.205,56.177 27.205,56.177 27.193))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

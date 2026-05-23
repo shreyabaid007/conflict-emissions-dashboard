@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": ["Bash(*)", "Read(*)", "Write(*)", "Edit(*)", "Glob(*)", "Grep(*)"],
+    "defaultMode": "bypassPermissions"
+  },
+  "env": {
+    "ANTHROPIC_MODEL": "claude-opus-4-6"
+  }
+}

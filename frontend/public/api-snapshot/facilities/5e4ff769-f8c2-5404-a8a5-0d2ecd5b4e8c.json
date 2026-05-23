@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:16.633720Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "5e4ff769-f8c2-5404-a8a5-0d2ecd5b4e8c",
+    "name": "Ras Laffan Industrial City",
+    "facility_type": "GAS_PROCESSING",
+    "country": "QAT",
+    "capacity_barrels": 1200000.0,
+    "operator": "QatarEnergy",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((51.535 25.9,51.565 25.9,51.565 25.925,51.535 25.925,51.535 25.9))",
+  "event_count": 25,
+  "total_p50_tco2e": 6711.299012312745
+}

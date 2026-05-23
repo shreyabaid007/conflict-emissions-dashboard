@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:22.663188Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "7eb58c65-bcf9-5d9b-a18f-1434390ce1ea",
+    "name": "Tehran Refinery (south tank farm)",
+    "facility_type": "STORAGE_TANK_FARM",
+    "country": "IRN",
+    "capacity_barrels": 250000.0,
+    "operator": "NIORDC \u2014 Tehran Oil Refining Company",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(51.43 35.542)",
+  "event_count": 4,
+  "total_p50_tco2e": 3312.219791414588
+}

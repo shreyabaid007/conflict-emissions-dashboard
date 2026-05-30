@@ -144,7 +144,7 @@ war-emission-tracker/
 │   │
 │   └── cli/                        # Typer CLI for ops
 │       ├── __init__.py
-│       ├── main.py                 # all commands: detect, quantify, recompute, ingest, etc.
+│       ├── main.py                 # all commands: detect, quantify, recompute, ingest, backfill, etc.
 │       └── verify.py               # verify approve/reject/resubmit/retract/add-assessment
 │
 ├── frontend/                       # Next.js app, separate deployment

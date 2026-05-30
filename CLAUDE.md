@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Name:** War Carbon Emissions Dashboard (WCED)
 **Mission:** A near-real-time, publicly auditable dashboard quantifying CO₂ emissions from oil and fuel infrastructure fires during the 2026 Iran–US–Israel war, using only public satellite data and peer-reviewed emission factors.
-**Stage:** V1 live — oil/fuel fire emissions only, methodology v1.0.5 (baseline subtraction + fraction-destroyed recalibration). Editorial workflow active, 7 facilities tracked, 47 events detected. Architecture supports future emission-category modules.
+**Stage:** V1 live — oil/fuel fire emissions only, methodology v1.1.0 (source-agnostic confidence table, GDELT primary). Editorial workflow active, 7 facilities tracked, 47 events detected. Architecture supports future emission-category modules.
 
 ## Core Principles (Non-Negotiable)
 
@@ -108,9 +108,9 @@ When asked to implement a feature:
 - Database stores `methodology_version` on every estimate
 - Recomputing all estimates is a deliberate operation via `wced recompute --methodology-version <ver>`, never automatic
 - The methodology PDF must be approved by the Scientific Steering Committee before being released as a version
-- Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities)
-- **Latest live version: v1.0.5**
-- **Pending: v1.1.0** — will record the ACLED→GDELT corroboration source swap and revised confidence decision table. Must be versioned before confidence-gated auto-publish goes live.
+- Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities), v1.1.0 (ACLED→GDELT source swap, source-agnostic confidence table)
+- **Latest live version: v1.1.0**
+- v1.1.0 records the ACLED→GDELT corroboration source swap and revised confidence decision table. ACLED is retained behind `WCED_ENABLE_ACLED` feature flag. Confidence table is now source-agnostic: any corroboration + S2 fire = CONFIRMED.
 - See `methodology/CHANGELOG.md` for detailed version history
 
 ## Editorial Workflow
@@ -148,15 +148,15 @@ Auto-publishing replaces the earlier blanket "no auto-publish for 6 months" rule
 - `.steering/structure.md` — repo layout (canonical)
 - `.steering/tech.md` — tech stack rationale
 - `methodology/v1.0.pdf` — source of truth for base equations (frozen)
-- `methodology/v1.0.5.tex` — current methodology (supersedes v1.0)
-- `methodology/CHANGELOG.md` — methodology version history (v1.0 through v1.0.5)
+- `methodology/v1.0.5.tex` — current methodology LaTeX source (supersedes v1.0)
+- `methodology/CHANGELOG.md` — methodology version history (v1.0 through v1.1.0)
 
 ## Operations
 
 - **Dev stack:** `docker compose -f deploy/docker-compose.yml up` (or `just up`)
 - **Task runner:** Justfile wraps common operations (`just detect`, `just quantify`, `just verify`)
 - **CLI entry point:** `wced` (Typer CLI in `wced/cli/main.py`)
-- **Key CLI commands:** `wced detect`, `wced quantify`, `wced recompute`, `wced ingest firms-historical`, `wced verify approve/reject/add-assessment`
+- **Key CLI commands:** `wced detect`, `wced quantify`, `wced recompute`, `wced ingest firms-historical`, `wced backfill ucdp --from --to`, `wced verify approve/reject/add-assessment`
 - **DB port:** 5432 by default in dev docker-compose (override with `POSTGRES_PORT` env var)
 - **FIRMS archival ingest:** `wced ingest firms-historical --start YYYY-MM-DD --end YYYY-MM-DD` uses SP sources with 5-day API chunks
 

@@ -34,7 +34,7 @@ Military and conflict emissions are the largest blind spot in global climate acc
 
 - Not a news ticker — events are vetted before publication, not pushed live
 - Not an alert system — no warnings, no predictions, only post-event reporting
-- Not a casualty tracker — out of scope, see ACLED
+- Not a casualty tracker — out of scope (see dedicated conflict-event databases such as ACLED or UCDP)
 - Not a damage assessment platform — see Conflict Ecology Lab portal
 - Not a tool for legal accountability — uncertainty bounds too wide for evidentiary use
 - Not partisan — does not advocate for or against the war

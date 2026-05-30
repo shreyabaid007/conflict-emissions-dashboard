@@ -50,7 +50,8 @@ ingest-acled date="today":
     fi
     {{compose}} exec wced-api wced ingest acled --date "$d" --yes
 
-# Run fire-event detection (new events land in PENDING_REVIEW)
+# Run fire-event detection (new events land in PENDING_REVIEW).
+# --no-auto-publish stays ON until the confidence-gated publish gate is merged.
 detect since="2026-02-28":
     {{compose}} exec wced-api wced detect --since {{since}} --no-auto-publish --yes
 

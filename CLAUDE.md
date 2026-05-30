@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Name:** War Carbon Emissions Dashboard (WCED)
 **Mission:** A near-real-time, publicly auditable dashboard quantifying CO₂ emissions from oil and fuel infrastructure fires during the 2026 Iran–US–Israel war, using only public satellite data and peer-reviewed emission factors.
-**Stage:** V1 live — oil/fuel fire emissions only, methodology v1.0.5 (baseline subtraction + fraction-destroyed recalibration). Editorial workflow active, 7 facilities tracked, 47 events detected. Architecture supports future emission-category modules.
+**Stage:** V1 live — oil/fuel fire emissions only, methodology v1.1.0 (source-agnostic confidence table, GDELT primary). Editorial workflow active, 7 facilities tracked, 47 events detected. Architecture supports future emission-category modules.
 
 ## Core Principles (Non-Negotiable)
 
@@ -46,9 +46,9 @@ This file provides guidance to Claude Code when working with this repository.
 
 See `.steering/structure.md` for the full canonical layout. Key directories:
 - `wced/` — main Python package
-- `wced/ingest/` — data source connectors (firms, acled, gdelt, sentinel2, sentinel5p)
+- `wced/ingest/` — data source connectors (firms, gdelt, sentinel2, sentinel5p, ucdp); acled.py retained behind feature flag
 - `wced/detect/` — fire detection (hotspot, facility_match, baseline, persistence)
-- `wced/verify/` — verification pipeline (sentinel2_check, acled_corroboration, confidence, editorial)
+- `wced/verify/` — verification pipeline (sentinel2_check, corroboration, confidence, editorial); acled_corroboration.py retained behind feature flag
 - `wced/quantify/` — emissions calculations (frp, inventory, factors, aggregate, reconcile, distribution)
 - `wced/ai/` — Claude client wrapper + vision classify
 - `wced/provenance/` — provenance store
@@ -92,7 +92,7 @@ When asked to implement a feature:
 - Using floating-point comparisons without explicit tolerances in tests
 - Caching across methodology versions (cache keys must include methodology version)
 - Hard-coding emission factors in Python (they live in `data/emission_factors.yaml`)
-- Auto-publishing incidents to the dashboard without editorial review for the first 6 months
+- Auto-publishing incidents that bypass the confidence-gated publish policy (see below)
 - Scalar arithmetic on `Distribution` that silently inherits the parent's `provenance_id` — the scalar's own source must be recorded; use `apply_scalar(factor, provenance_id=factor_record_id)` when the scalar comes from `data/emission_factors.yaml`
 
 ## Sensitive Areas — Require Extra Care
@@ -108,8 +108,9 @@ When asked to implement a feature:
 - Database stores `methodology_version` on every estimate
 - Recomputing all estimates is a deliberate operation via `wced recompute --methodology-version <ver>`, never automatic
 - The methodology PDF must be approved by the Scientific Steering Committee before being released as a version
-- Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities)
-- **Latest live version: v1.0.5**
+- Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities), v1.1.0 (ACLED→GDELT source swap, source-agnostic confidence table)
+- **Latest live version: v1.1.0**
+- v1.1.0 records the ACLED→GDELT corroboration source swap and revised confidence decision table. ACLED is retained behind `WCED_ENABLE_ACLED` feature flag. Confidence table is now source-agnostic: any corroboration + S2 fire = CONFIRMED.
 - See `methodology/CHANGELOG.md` for detailed version history
 
 ## Editorial Workflow
@@ -120,6 +121,20 @@ When asked to implement a feature:
 - `wced verify approve/reject/resubmit/retract` commands in `cli/verify.py`
 - `wced verify add-assessment` attaches DamageAssessment to already-published events
 - Never silently delete; always changelog
+
+## Confidence-Gated Auto-Publish Policy
+
+Auto-publishing replaces the earlier blanket "no auto-publish for 6 months" rule. It is safe only because every gate below is enforced **in code**, not in discipline.
+
+1. **Confidence gate.** Only `Confirmed` or `Verified` events (≥2 independent sources OR satellite confirmation) auto-publish. `Reported`, `Suspected`, and `Claimed` events route to a hold queue for manual editorial review.
+2. **Provenance gate.** The publish function rejects any estimate that lacks a complete `ProvenanceRecord` chain.
+3. **Distribution gate.** The publish function rejects any `Distribution` with fewer than 10,000 Monte Carlo samples.
+4. **Cross-method gate.** Bottom-up vs top-down divergence beyond tolerance routes the event to the review queue instead of auto-publishing.
+5. **Anomaly auto-retract.** An `anomaly-watch` process flags outlier estimates and auto-retracts them to `PENDING_REVIEW` with a public "under review" note.
+6. **Audit trail.** Every publish/retract/restate transition is appended to the `publication_log` table (append-only).
+7. **One-command rollback.** `wced verify retract <event_id>` reverses any publication; methodology rollback via `wced recompute --methodology-version`.
+
+**Status:** The code-level publish gate is not yet merged. Until it lands, `--no-auto-publish` remains enforced in the Justfile `detect` recipe.
 
 ## Useful Documents
 
@@ -133,15 +148,15 @@ When asked to implement a feature:
 - `.steering/structure.md` — repo layout (canonical)
 - `.steering/tech.md` — tech stack rationale
 - `methodology/v1.0.pdf` — source of truth for base equations (frozen)
-- `methodology/v1.0.5.tex` — current methodology (supersedes v1.0)
-- `methodology/CHANGELOG.md` — methodology version history (v1.0 through v1.0.5)
+- `methodology/v1.0.5.tex` — current methodology LaTeX source (supersedes v1.0)
+- `methodology/CHANGELOG.md` — methodology version history (v1.0 through v1.1.0)
 
 ## Operations
 
 - **Dev stack:** `docker compose -f deploy/docker-compose.yml up` (or `just up`)
 - **Task runner:** Justfile wraps common operations (`just detect`, `just quantify`, `just verify`)
 - **CLI entry point:** `wced` (Typer CLI in `wced/cli/main.py`)
-- **Key CLI commands:** `wced detect`, `wced quantify`, `wced recompute`, `wced ingest firms-historical`, `wced verify approve/reject/add-assessment`
+- **Key CLI commands:** `wced detect`, `wced quantify`, `wced recompute`, `wced ingest firms-historical`, `wced backfill ucdp --from --to`, `wced verify approve/reject/add-assessment`
 - **DB port:** 5432 by default in dev docker-compose (override with `POSTGRES_PORT` env var)
 - **FIRMS archival ingest:** `wced ingest firms-historical --start YYYY-MM-DD --end YYYY-MM-DD` uses SP sources with 5-day API chunks
 

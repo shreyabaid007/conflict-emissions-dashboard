@@ -138,9 +138,17 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 - Monte Carlo (10,000 iterations) for a single event < 5 seconds
 - Full reanalysis (recompute all estimates for new methodology version) < 4 hours
 
-## Cost Targets (V1, monthly)
+## Deployment (v2)
 
-- Infrastructure: < $500/mo (small VPS + S3 + PG instance)
-- Claude API: < $1,000/mo (budget per AI module separately; alert on anomaly)
-- Planet Labs tasked imagery: budget separately, only for high-priority events
-- All other satellite data: free (Sentinel via Planetary Computer, FIRMS, MODIS)
+- **Compute & API:** Modal.com (serverless). Daily ingest via `modal.Cron`; FastAPI served via `@modal.asgi_app` with scale-to-zero. Funded by $1,000 Modal credits — no recurring cash cost until credits exhaust.
+- **Database:** Neon (recommended) or Supabase — free tier with PostGIS. Neon scales to zero (matches Modal); Supabase free tier pauses after 7 days idle but the daily Modal cron keeps it awake.
+- **Frontend:** Vercel or Cloudflare Pages — free tier (Next.js deploys free).
+- **Agent orchestration:** Local machine. Claude Code / Hermes / Paperclip run on the Max 5x allocation. Single-agent passes only — avoid parallel agent teams that blow weekly rate limits.
+- **Docker Compose remains for local dev.** The `just up` workflow is unchanged.
+
+## Cost Targets (v2, monthly)
+
+- **$0/mo additional cash.** Claude Max 5x ($100/mo) is already owned and covers all agent work. Modal credits cover compute. Postgres, frontend, and all satellite data sources are free-tier.
+- First real cash cost only appears when (a) Modal credits exhaust, or (b) data outgrows the free Postgres tier — at which point a ~$50/mo VPS or ~$19/mo Neon Launch plan is the next step.
+- Planet Labs tasked imagery: budget separately, only for high-priority events.
+- All satellite data: free (Sentinel via Planetary Computer, FIRMS, MODIS).

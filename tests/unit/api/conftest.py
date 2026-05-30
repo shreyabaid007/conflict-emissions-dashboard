@@ -1,20 +1,19 @@
 """Fixtures for API tests — in-memory SQLite database + TestClient."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event as sa_event, text
+from sqlalchemy import create_engine, text
+from sqlalchemy import event as sa_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from wced.api.dependencies import get_db
 from wced.api.main import create_app
-from wced.db import models
-
-import re
 
 _POINT_RE = re.compile(r"POINT\(\s*([-\d.]+)\s+([-\d.]+)\s*\)")
 
@@ -217,6 +216,34 @@ def db_engine():
                 discrepancy_ratio REAL NOT NULL,
                 needs_review INTEGER NOT NULL DEFAULT 0,
                 generated_at TIMESTAMP NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE publication_log (
+                id TEXT PRIMARY KEY,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                from_state TEXT NOT NULL,
+                to_state TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                reason TEXT,
+                methodology_version TEXT,
+                created_at TIMESTAMP NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE recompute_runs (
+                id TEXT PRIMARY KEY,
+                methodology_version TEXT NOT NULL,
+                date_range_start TIMESTAMP,
+                date_range_end TIMESTAMP,
+                initiator TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                events_affected INTEGER,
+                started_at TIMESTAMP NOT NULL,
+                finished_at TIMESTAMP,
+                status TEXT NOT NULL
             )
         """))
 

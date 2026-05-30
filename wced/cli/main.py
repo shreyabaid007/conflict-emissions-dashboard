@@ -237,6 +237,12 @@ def recompute(
     detection history, runs FRP (and inventory where damage assessments
     exist), reconciles, and writes new emission_estimate rows. Old
     estimates are preserved as historical record.
+
+    All recomputed events are routed to PENDING_REVIEW — nothing is
+    auto-published. Each transition is appended to the publication_log
+    table. The run is tracked in recompute_runs (opened at start,
+    closed at finish). A summary report is written to
+    docs/RECOMPUTE_{version}_REPORT.md.
     """
     _confirm_or_abort(
         f"recompute ALL published estimates under methodology v{methodology_version}",
@@ -250,7 +256,12 @@ def recompute(
     from sqlalchemy import func, select
 
     from wced.db import models
-    from wced.db.repositories import EmissionEstimateRepository, PostgisFacilityRepository
+    from wced.db.repositories import (
+        EmissionEstimateRepository,
+        PostgisFacilityRepository,
+        PublicationLogRepository,
+        RecomputeRunRepository,
+    )
     from wced.db.repositories.facility import _row_to_facility
     from wced.db.session import get_engine, get_session_factory
     from wced.detect.baseline import compute_baseline
@@ -267,22 +278,48 @@ def recompute(
         Source as ProvSource,
         SourceType,
     )
+    from wced.pipeline.recompute import (
+        EventRecomputeResult,
+        PendingReviewTransition,
+        RecomputeReport,
+        generate_recompute_report_md,
+        recompute_confidence_label,
+        route_events_to_pending_review,
+    )
     from wced.provenance.store import InMemoryProvenanceStore
     from wced.quantify.factors import load_factors, load_parameter_distributions
     from wced.quantify.frp import compute_frp_emissions
     from wced.quantify.inventory import compute_inventory_emissions
     from wced.quantify.reconcile import reconcile_estimates
+    from wced.settings import get_settings
 
     typer.echo(
         f"Recomputing all estimates under methodology v{methodology_version}..."
     )
 
+    settings = get_settings()
     factors = load_factors()
     params = load_parameter_distributions()
     engine = get_engine()
     Session = get_session_factory(engine)
+    run_id = uuid4()
+    run_started_at = datetime.now(tz=UTC)
 
     with Session() as session:
+        # 0. Open recompute_runs row.
+        recompute_repo = RecomputeRunRepository(session)
+        recompute_repo.open_run(
+            id=run_id,
+            methodology_version=methodology_version,
+            date_range_start=None,
+            date_range_end=None,
+            initiator=os.environ.get("USER", "unknown"),
+            trigger="cli:recompute",
+            started_at=run_started_at,
+        )
+        session.flush()
+        typer.echo(f"Opened recompute run {run_id}.")
+
         # 1. Load all PUBLISHED fire_events.
         events_rows = session.execute(
             select(models.fire_events)
@@ -293,6 +330,13 @@ def recompute(
 
         if not events_rows:
             typer.echo("No published events to recompute.")
+            recompute_repo.close_run(
+                run_id,
+                status="COMPLETED",
+                finished_at=datetime.now(tz=UTC),
+                events_affected=0,
+            )
+            session.commit()
             return
 
         # 2. Load all facilities (with WKT geometry for spatial matching).
@@ -599,7 +643,159 @@ def recompute(
                             prov_repo.link_input(inv_prov_id, firms_src_id, "source")
                         prov_repo.link_input(recon_prov_id, inv_prov_id, "provenance_record")
 
+        # 6. Route all recomputed events to PENDING_REVIEW.
+        pub_log_repo = PublicationLogRepository(session)
+        fire_event_repo = __import__(
+            "wced.db.repositories.fire_event", fromlist=["FireEventRepository"]
+        ).FireEventRepository(session)
+        recompute_results: list[EventRecomputeResult] = []
+        n_routed = 0
+
+        for row in events_rows:
+            r = row._asdict()
+            event_id = r["id"]
+            old_label = ConfidenceLabel(r["confidence_label"])
+            old_status = EventStatus(r["status"])
+            facility = facilities_by_id.get(r["facility_id"])
+            facility_name = facility.name if facility else "unknown"
+
+            # Look up the old p50 from existing estimates (pre-recompute).
+            old_estimate_row = session.execute(
+                select(models.emission_estimates.c.p50)
+                .where(models.emission_estimates.c.event_id == event_id)
+                .where(
+                    models.emission_estimates.c.methodology_version
+                    != methodology_version
+                )
+                .order_by(models.emission_estimates.c.created_at.desc())
+                .limit(1)
+            ).first()
+            old_p50 = float(old_estimate_row[0]) if old_estimate_row else 0.0
+
+            # Look up the new p50 from estimates just written.
+            new_estimate_row = session.execute(
+                select(models.emission_estimates.c.p50)
+                .where(models.emission_estimates.c.event_id == event_id)
+                .where(
+                    models.emission_estimates.c.methodology_version
+                    == methodology_version
+                )
+                .order_by(models.emission_estimates.c.created_at.desc())
+                .limit(1)
+            ).first()
+            new_p50 = float(new_estimate_row[0]) if new_estimate_row else 0.0
+
+            # Look up corroboration metadata from provenance records.
+            prov_rows = session.execute(
+                select(models.provenance_records.c.parameters)
+                .where(
+                    models.provenance_records.c.method.like(
+                        "confidence_assignment%"
+                    )
+                )
+                .where(
+                    models.provenance_records.c.id.in_(
+                        select(models.provenance_inputs.c.input_id)
+                        .where(
+                            models.provenance_inputs.c.provenance_id
+                            == r["provenance_id"]
+                        )
+                    )
+                )
+            ).all()
+
+            has_acled = False
+            has_gdelt = False
+            has_s2_fire = False
+            for prov_row in prov_rows:
+                params = prov_row[0] or {}
+                has_acled = has_acled or params.get("has_acled", False)
+                has_gdelt = has_gdelt or params.get("has_gdelt", False)
+                has_s2_fire = has_s2_fire or params.get(
+                    "s2_confirms_fire", False
+                )
+
+            new_label = recompute_confidence_label(
+                n_overpasses=2,
+                s2_confirms_fire=has_s2_fire,
+                has_acled_corroboration=has_acled,
+                has_gdelt_corroboration=has_gdelt,
+                enable_acled=settings.enable_acled,
+            )
+
+            label_changed = new_label != old_label
+
+            # Update confidence_label on the fire_event row.
+            if label_changed:
+                session.execute(
+                    models.fire_events.update()
+                    .where(models.fire_events.c.id == event_id)
+                    .values(confidence_label=new_label.value)
+                )
+
+            # Route to PENDING_REVIEW.
+            route_now = datetime.now(tz=UTC)
+            if old_status is not EventStatus.RETRACTED:
+                fire_event_repo.update_status(
+                    event_id, EventStatus.PENDING_REVIEW.value, route_now
+                )
+                pub_log_repo.append(
+                    id=uuid4(),
+                    target_type="fire_event",
+                    target_id=event_id,
+                    from_state=old_status.value,
+                    to_state=EventStatus.PENDING_REVIEW.value,
+                    action="recompute_route_to_review",
+                    actor="wced:recompute",
+                    reason=(
+                        f"Recomputed under methodology v{methodology_version}"
+                    ),
+                    methodology_version=methodology_version,
+                    created_at=route_now,
+                )
+                n_routed += 1
+
+            recompute_results.append(EventRecomputeResult(
+                event_id=event_id,
+                facility_name=facility_name,
+                old_label=old_label,
+                new_label=new_label,
+                old_p50_tco2e=old_p50,
+                new_p50_tco2e=new_p50,
+                had_acled_corroboration=has_acled,
+                had_gdelt_corroboration=has_gdelt,
+                had_s2_fire=has_s2_fire,
+                label_changed=label_changed,
+                routed_to_pending=old_status is not EventStatus.RETRACTED,
+            ))
+
+        # 7. Close recompute_runs row.
+        run_finished_at = datetime.now(tz=UTC)
+        recompute_repo.close_run(
+            run_id,
+            status="COMPLETED",
+            finished_at=run_finished_at,
+            events_affected=n_written,
+        )
+
         session.commit()
+
+    # 8. Generate report.
+    report = RecomputeReport(
+        methodology_version=methodology_version,
+        run_id=run_id,
+        started_at=run_started_at,
+        finished_at=run_finished_at,
+        events=recompute_results,
+    )
+    report_md = generate_recompute_report_md(report)
+    report_path = (
+        Path(__file__).parent.parent.parent
+        / "docs"
+        / f"RECOMPUTE_{methodology_version}_REPORT.md"
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report_md, encoding="utf-8")
 
     typer.echo(
         typer.style(
@@ -613,6 +809,9 @@ def recompute(
     typer.echo(f"  {n_insufficient} events with insufficient_baseline_history flag")
     typer.echo(f"  {n_inventory} events with inventory method applied")
     typer.echo(f"  {len(firms_source_cache)} FIRMS source records persisted")
+    typer.echo(f"  {n_routed} events routed to PENDING_REVIEW")
+    typer.echo(f"  {report.labels_changed} confidence labels changed")
+    typer.echo(f"  Report written to {report_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -854,6 +1053,70 @@ def ingest_firms_historical(
         session.commit()
     typer.echo(
         typer.style(f"✓ Inserted {total_inserted} archival FIRMS detections.", fg="green")
+    )
+
+
+@ingest_app.command("ucdp")
+def ingest_ucdp(
+    start_str: Annotated[
+        str,
+        typer.Option("--start", help="Start date (inclusive), YYYY-MM-DD."),
+    ],
+    end_str: Annotated[
+        str,
+        typer.Option("--end", help="End date (inclusive), YYYY-MM-DD."),
+    ],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
+) -> None:
+    """Backfill UCDP georeferenced conflict events for historical validation.
+
+    UCDP data has months of latency — this is a validation/backfill source,
+    not a real-time feed. Fetched events are logged for cross-validation
+    against GDELT/FIRMS detections.
+    """
+    import asyncio
+
+    start_day = _parse_iso_date(start_str, field="--start")
+    end_day = _parse_iso_date(end_str, field="--end")
+    if end_day < start_day:
+        raise typer.BadParameter("--end must be >= --start")
+    _confirm_or_abort(
+        f"backfill UCDP events from {start_day} to {end_day}", yes,
+    )
+    _audit("ingest.ucdp", start=start_day.isoformat(), end=end_day.isoformat())
+
+    from wced.ingest.ucdp import UCDPConnector
+
+    typer.echo(
+        f"Fetching UCDP GED events for {start_day} to {end_day} "
+        f"(validation-only, not a real-time source)..."
+    )
+
+    async def _stream() -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        async with UCDPConnector() as conn:
+            async for rec in conn.query_events(start_day, end_day):
+                rows.append(rec)
+        return rows
+
+    raw_records = asyncio.run(_stream())
+    typer.echo(f"Fetched {len(raw_records)} UCDP events.")
+
+    for rec in raw_records:
+        event = rec.get("event")
+        if event is None:
+            continue
+        typer.echo(
+            f"  {event.date_start} | {event.country:>12s} | "
+            f"({event.latitude:.2f}, {event.longitude:.2f}) | "
+            f"{event.conflict_name[:50]}"
+        )
+
+    typer.echo(
+        typer.style(
+            f"✓ {len(raw_records)} UCDP events available for validation.",
+            fg="green",
+        )
     )
 
 
@@ -1479,6 +1742,38 @@ def db_migrate(
         alembic_cfg.set_main_option("sqlalchemy.url", dsn)
     command.upgrade(alembic_cfg, "head")
     typer.echo(typer.style("✓ Migrations applied.", fg="green"))
+
+
+# ---------------------------------------------------------------------------
+# backfill
+# ---------------------------------------------------------------------------
+
+backfill_app = typer.Typer(
+    help="Backfill historical data from validation-only sources.",
+    no_args_is_help=True,
+)
+app.add_typer(backfill_app, name="backfill")
+
+
+@backfill_app.command("ucdp")
+def backfill_ucdp(
+    from_str: Annotated[
+        str,
+        typer.Option("--from", help="Start date (inclusive), YYYY-MM-DD."),
+    ],
+    to_str: Annotated[
+        str,
+        typer.Option("--to", help="End date (inclusive), YYYY-MM-DD."),
+    ],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
+) -> None:
+    """Backfill UCDP georeferenced events for historical validation.
+
+    Alias for ``wced ingest ucdp``. UCDP data has months of latency and is
+    used exclusively for cross-validating GDELT/FIRMS detections, not for
+    real-time monitoring.
+    """
+    ingest_ucdp(start_str=from_str, end_str=to_str, yes=yes)
 
 
 # ---------------------------------------------------------------------------

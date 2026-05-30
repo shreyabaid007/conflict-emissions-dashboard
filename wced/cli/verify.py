@@ -14,8 +14,9 @@ The queue backend is selected from the environment:
 For local development and CI, InMemory is sufficient. Production deployments
 must set WCED_DB_DSN so state persists across runs.
 
-CLAUDE.md: "For V1, every event goes through manual editorial review. We do
-not auto-publish, even high-confidence events, in the first 6 months."
+CLAUDE.md: See "Confidence-Gated Auto-Publish Policy" — auto-publish is
+gated behind confidence + provenance + distribution checks. Until the
+code-level publish gate merges, --no-auto-publish is enforced.
 """
 from __future__ import annotations
 

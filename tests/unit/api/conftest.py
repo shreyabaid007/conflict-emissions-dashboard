@@ -14,6 +14,24 @@ from wced.api.dependencies import get_db
 from wced.api.main import create_app
 from wced.db import models
 
+import re
+
+_POINT_RE = re.compile(r"POINT\(\s*([-\d.]+)\s+([-\d.]+)\s*\)")
+
+
+def _st_x(wkt: str | None) -> float | None:
+    if wkt is None:
+        return None
+    m = _POINT_RE.search(wkt)
+    return float(m.group(1)) if m else None
+
+
+def _st_y(wkt: str | None) -> float | None:
+    if wkt is None:
+        return None
+    m = _POINT_RE.search(wkt)
+    return float(m.group(2)) if m else None
+
 
 @pytest.fixture()
 def db_engine():
@@ -29,6 +47,9 @@ def db_engine():
     def _register_functions(dbapi_conn, _connection_record):
         dbapi_conn.create_function("ST_AsText", 1, lambda v: v)
         dbapi_conn.create_function("ST_GeomFromText", 2, lambda wkt, srid: wkt)
+        dbapi_conn.create_function("ST_Centroid", 1, lambda v: v)
+        dbapi_conn.create_function("ST_X", 1, _st_x)
+        dbapi_conn.create_function("ST_Y", 1, _st_y)
 
     # Create tables using DDL that SQLite understands.
     # We replicate the schema from models.metadata but replace Geometry with Text.

@@ -9,12 +9,30 @@ import pytest
 
 schemathesis = pytest.importorskip("schemathesis", reason="schemathesis not installed")
 
+import re  # noqa: E402
+
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from wced.api.dependencies import get_db  # noqa: E402
 from wced.api.main import create_app  # noqa: E402
+
+_POINT_RE = re.compile(r"POINT\(\s*([-\d.]+)\s+([-\d.]+)\s*\)")
+
+
+def _st_x(wkt: str | None) -> float | None:
+    if wkt is None:
+        return None
+    m = _POINT_RE.search(wkt)
+    return float(m.group(1)) if m else None
+
+
+def _st_y(wkt: str | None) -> float | None:
+    if wkt is None:
+        return None
+    m = _POINT_RE.search(wkt)
+    return float(m.group(2)) if m else None
 
 
 def _make_app():
@@ -31,6 +49,9 @@ def _make_app():
     def _register_functions(dbapi_conn, _connection_record):
         dbapi_conn.create_function("ST_AsText", 1, lambda v: v)
         dbapi_conn.create_function("ST_GeomFromText", 2, lambda wkt, srid: wkt)
+        dbapi_conn.create_function("ST_Centroid", 1, lambda v: v)
+        dbapi_conn.create_function("ST_X", 1, _st_x)
+        dbapi_conn.create_function("ST_Y", 1, _st_y)
 
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE facilities (id TEXT PRIMARY KEY, name TEXT NOT NULL, facility_type TEXT NOT NULL, geometry TEXT NOT NULL, country VARCHAR(3) NOT NULL, capacity_barrels REAL, capacity_uncertainty_pct REAL NOT NULL DEFAULT 30.0, operator TEXT, source_url TEXT NOT NULL, added_at TIMESTAMP NOT NULL, notes TEXT)"))

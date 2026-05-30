@@ -46,6 +46,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 See `.steering/structure.md` for the full canonical layout. Key directories:
 - `wced/` — main Python package
+- `wced/categories/` — emission category protocol (`base.py`) and plugins (`oil_fuel_fire/`); discovered via pyproject entry-points `wced.categories`
 - `wced/ingest/` — data source connectors (firms, gdelt, sentinel2, sentinel5p, ucdp); acled.py retained behind feature flag
 - `wced/detect/` — fire detection (hotspot, facility_match, baseline, persistence)
 - `wced/verify/` — verification pipeline (sentinel2_check, corroboration, confidence, editorial); acled_corroboration.py retained behind feature flag
@@ -134,7 +135,7 @@ Auto-publishing replaces the earlier blanket "no auto-publish for 6 months" rule
 6. **Audit trail.** Every publish/retract/restate transition is appended to the `publication_log` table (append-only).
 7. **One-command rollback.** `wced verify retract <event_id>` reverses any publication; methodology rollback via `wced recompute --methodology-version`.
 
-**Status:** The code-level publish gate is not yet merged. Until it lands, `--no-auto-publish` remains enforced in the Justfile `detect` recipe.
+**Status:** The code-level publish gate (`publish_gate` in `wced/verify/editorial.py`) is merged. The Justfile `detect` recipe no longer passes `--no-auto-publish`.
 
 ## Useful Documents
 

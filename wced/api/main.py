@@ -10,6 +10,8 @@ from wced.api.routes import (
     events_router,
     facilities_router,
     meta_router,
+    provenance_router,
+    revisions_router,
     timeseries_router,
 )
 
@@ -44,6 +46,8 @@ def create_app() -> FastAPI:
     app.include_router(timeseries_router)
     app.include_router(aggregates_router)
     app.include_router(meta_router)
+    app.include_router(provenance_router)
+    app.include_router(revisions_router)
 
     return app
 

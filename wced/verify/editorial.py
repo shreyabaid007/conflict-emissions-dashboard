@@ -27,8 +27,10 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 from uuid import UUID, uuid4
+
+from pydantic import BaseModel, ConfigDict
 
 from wced.models.editorial import (
     EditorialAction,
@@ -37,8 +39,196 @@ from wced.models.editorial import (
     validate_transition,
 )
 from wced.models.event import EventStatus, FireEvent
+from wced.models.provenance import ConfidenceLabel, ProvenanceRecord, Source
+from wced.settings import get_settings
+
+if TYPE_CHECKING:
+    from wced.quantify.distribution import Distribution
+    from wced.quantify.reconcile import ReconciliationResult
+    from wced.provenance.store import ProvenanceStore
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Confidence-gated publish gate (CLAUDE.md §"Confidence-Gated Auto-Publish")
+# ---------------------------------------------------------------------------
+
+_AUTO_PUBLISH_LABELS = frozenset({ConfidenceLabel.CONFIRMED, ConfidenceLabel.VERIFIED})
+_HOLD_LABELS = frozenset({
+    ConfidenceLabel.REPORTED,
+    ConfidenceLabel.SUSPECTED,
+    ConfidenceLabel.CLAIMED,
+})
+_MIN_MC_SAMPLES = 10_000
+
+
+class PublishDecision(BaseModel):
+    """Result of ``publish_gate``: publish, hold, or reject with a reason."""
+
+    model_config = ConfigDict(frozen=True)
+
+    action: Literal["publish", "hold", "reject"]
+    reason: str | None = None
+
+
+def publish_gate(
+    event: FireEvent,
+    distribution: "Distribution",
+    provenance_store: "ProvenanceStore",
+    *,
+    reconciliation: "ReconciliationResult | None" = None,
+    cross_method_tolerance: float | None = None,
+) -> PublishDecision:
+    """Evaluate the four publish gates and return a routing decision.
+
+    Gate evaluation order (first failure wins):
+      1. **Provenance gate** — event.provenance_id must resolve to a complete
+         chain (at least one Source leaf) in *provenance_store*.
+      2. **Distribution gate** — *distribution* must carry ≥10,000 MC samples.
+      3. **Confidence gate** — Confirmed/Verified → publish;
+         Reported/Suspected/Claimed → hold for manual review.
+      4. **Cross-method gate** — when a *reconciliation* result is supplied,
+         a bottom-up (inventory) vs top-down (FRP) divergence beyond tolerance
+         downgrades an otherwise auto-publishable event to ``hold`` so an
+         editor can resolve the discrepancy (CLAUDE.md gate #4, methodology
+         §3.5). This gate runs only after the confidence gate would publish —
+         a low-confidence event is already held and a rejected event already
+         rejected, so cross-method divergence cannot make either worse.
+
+    Parameters
+    ----------
+    event : FireEvent
+        The event being evaluated. Must be in PENDING_REVIEW status.
+    distribution : Distribution
+        The emission estimate distribution for this event.
+    provenance_store : ProvenanceStore
+        Store to look up the provenance chain for *event.provenance_id*.
+    reconciliation : ReconciliationResult or None
+        The FRP/inventory reconciliation for this event (from
+        ``wced.quantify.reconcile``). When None, the cross-method gate is
+        skipped — single-method events and callers that have not run
+        reconciliation behave exactly as before.
+    cross_method_tolerance : float or None
+        Maximum acceptable agreement ratio ρ = p50(inventory) / p50(FRP) for
+        auto-publish; the event must satisfy ``1/tol ≤ ρ ≤ tol``. When None,
+        falls back to ``Settings.cross_method_tolerance`` (env
+        ``WCED_CROSS_METHOD_TOLERANCE``, default 2.0). Must be > 0.
+
+    Returns
+    -------
+    PublishDecision
+        ``action="publish"`` — auto-approve.
+        ``action="hold"``    — leave in PENDING_REVIEW for manual editorial.
+        ``action="reject"``  — reject with a mandatory reason.
+    """
+    # Avoid circular import at module level
+    from wced.provenance.store import ProvenanceStore as _PS
+
+    # --- Gate 1: Provenance ---
+    try:
+        chain = list(provenance_store.walk_upstream(event.provenance_id))
+    except KeyError:
+        return PublishDecision(
+            action="reject",
+            reason=(
+                f"Provenance chain incomplete: no record found for "
+                f"provenance_id={event.provenance_id}"
+            ),
+        )
+
+    has_source = any(isinstance(n, Source) for n in chain)
+    if not has_source:
+        return PublishDecision(
+            action="reject",
+            reason=(
+                f"Provenance chain has no upstream Source for "
+                f"provenance_id={event.provenance_id}"
+            ),
+        )
+
+    # --- Gate 2: Distribution sample count ---
+    if distribution.samples is None:
+        return PublishDecision(
+            action="reject",
+            reason="Distribution has no samples (samples=None); require ≥10,000",
+        )
+    if len(distribution.samples) < _MIN_MC_SAMPLES:
+        return PublishDecision(
+            action="reject",
+            reason=(
+                f"Distribution has {len(distribution.samples)} samples; "
+                f"require ≥10,000"
+            ),
+        )
+
+    # --- Gate 3: Confidence label ---
+    if event.confidence_label not in _AUTO_PUBLISH_LABELS:
+        return PublishDecision(
+            action="hold",
+            reason=(
+                f"Confidence {event.confidence_label.value} requires manual "
+                f"editorial review"
+            ),
+        )
+
+    # --- Gate 4: Cross-method reconciliation (methodology §3.5) ---
+    if reconciliation is not None:
+        divergence_reason = _cross_method_divergence_reason(
+            reconciliation, cross_method_tolerance
+        )
+        if divergence_reason is not None:
+            return PublishDecision(action="hold", reason=divergence_reason)
+
+    return PublishDecision(action="publish")
+
+
+def _cross_method_divergence_reason(
+    reconciliation: "ReconciliationResult",
+    cross_method_tolerance: float | None,
+) -> str | None:
+    """Return a hold reason if bottom-up vs top-down diverge beyond tolerance.
+
+    ρ = p50(inventory) / p50(FRP). The methods agree for auto-publish when
+    ``1/tol ≤ ρ ≤ tol``. Two ways to fail:
+
+    1. ``reconciliation.needs_review`` — reconcile already refused to promote
+       a final distribution because ρ fell outside its agreement band
+       (methodology §3.5). This is honoured regardless of *tol*.
+    2. ρ is within reconcile's band but outside the (possibly stricter)
+       auto-publish *tol* configured here.
+
+    Returns None when the methods agree, or when only one method is available
+    (``agreement_ratio is None`` — there is no ratio to test).
+    """
+    if reconciliation.needs_review:
+        return (
+            "Cross-method reconciliation flagged divergence beyond tolerance; "
+            "routing to editorial review. "
+            f"{reconciliation.review_reason}"
+        )
+
+    rho = reconciliation.agreement_ratio
+    if rho is None:
+        # Single-method estimate — nothing to reconcile.
+        return None
+
+    tol = (
+        cross_method_tolerance
+        if cross_method_tolerance is not None
+        else get_settings().cross_method_tolerance
+    )
+    if tol <= 0:
+        raise ValueError(f"cross_method_tolerance must be > 0; got {tol}")
+
+    low = 1.0 / tol
+    if rho < low or rho > tol:
+        return (
+            f"Bottom-up vs top-down divergence ρ={rho:.3f} outside auto-publish "
+            f"tolerance [{low:.3f}, {tol:.3f}] (methodology §3.5); routing to "
+            f"editorial review."
+        )
+    return None
 
 
 @runtime_checkable
@@ -91,6 +281,16 @@ class ReviewQueueProtocol(Protocol):
         reason: str,
     ) -> FireEvent:
         """Transition a PUBLISHED event to RETRACTED with a public changelog entry."""
+        ...
+
+    def flag_anomaly(
+        self,
+        event_id: UUID,
+        *,
+        reviewer: str,
+        reason: str,
+    ) -> FireEvent:
+        """Auto-retract a PUBLISHED outlier to PENDING_REVIEW (anomaly-watch)."""
         ...
 
     def get(self, event_id: UUID) -> FireEvent:
@@ -411,6 +611,74 @@ class InMemoryReviewQueue:
         )
         return updated
 
+    def flag_anomaly(
+        self,
+        event_id: UUID,
+        *,
+        reviewer: str,
+        reason: str,
+    ) -> FireEvent:
+        """Auto-retract a published outlier to PENDING_REVIEW for re-review.
+
+        This is the editorial action behind CLAUDE.md gate #5: the
+        ``anomaly-watch`` agent flags an estimate that diverges from the
+        facility's history or its cross-method estimate, returns it to the
+        review queue, and attaches a public "under review" note. Unlike
+        ``retract`` (which is terminal), an anomaly-flagged event can be
+        re-approved once an editor resolves the discrepancy.
+
+        Parameters
+        ----------
+        event_id : UUID
+            Event to flag. Must be in PUBLISHED status.
+        reviewer : str
+            Component or person triggering the flag (e.g. "anomaly-watch").
+        reason : str
+            Mandatory explanation (non-empty). Surfaced publicly alongside the
+            "under review" note.
+
+        Returns
+        -------
+        FireEvent
+            Updated event with status PENDING_REVIEW.
+
+        Raises
+        ------
+        KeyError
+            If the event is not in the queue.
+        ValueError
+            If ``reason`` is empty.
+        EditorialTransitionError
+            If the event is not in PUBLISHED status.
+        """
+        if not reason or not reason.strip():
+            raise ValueError(
+                f"flag_anomaly() requires a non-empty reason for event {event_id}."
+            )
+        event = self._require(event_id)
+        next_status = validate_transition(
+            event_id, event.status, EditorialActionType.ANOMALY_FLAGGED
+        )
+        updated = self._update_status(event, next_status)
+        self._record_action(
+            event_id=event_id,
+            action_type=EditorialActionType.ANOMALY_FLAGGED,
+            reviewer=reviewer,
+            notes=reason,
+            previous_status=event.status,
+            new_status=next_status,
+        )
+        self._append_publication_log(
+            target_id=event_id, from_state=event.status,
+            to_state=next_status, action="anomaly_retract", actor=reviewer,
+            reason=reason, public_note="under review",
+        )
+        log.warning(
+            "editorial.flag_anomaly: event=%s reviewer=%s reason=%r",
+            event_id, reviewer, reason,
+        )
+        return updated
+
     def get(self, event_id: UUID) -> FireEvent:
         """Return the current event state.
 
@@ -446,6 +714,7 @@ class InMemoryReviewQueue:
         action: str,
         actor: str,
         reason: str | None = None,
+        public_note: str | None = None,
     ) -> None:
         self._publication_log.append({
             "id": uuid4(),
@@ -456,6 +725,7 @@ class InMemoryReviewQueue:
             "action": action,
             "actor": actor,
             "reason": reason,
+            "public_note": public_note,
             "created_at": datetime.now(tz=UTC),
         })
 
@@ -534,6 +804,12 @@ class PostgresReviewQueue:
     def retract(self, event_id: UUID, *, reviewer: str, reason: str) -> FireEvent:
         # UPDATE fire_events SET status='RETRACTED', updated_at=now() WHERE id=event_id;
         # INSERT INTO editorial_actions (RETRACTED) ...;
+        raise NotImplementedError
+
+    def flag_anomaly(self, event_id: UUID, *, reviewer: str, reason: str) -> FireEvent:
+        # UPDATE fire_events SET status='PENDING_REVIEW', updated_at=now() WHERE id=event_id;
+        # INSERT INTO editorial_actions (ANOMALY_FLAGGED) ...;
+        # INSERT INTO publication_log (action='anomaly_retract', public_note='under review') ...;
         raise NotImplementedError
 
     def get(self, event_id: UUID) -> FireEvent:

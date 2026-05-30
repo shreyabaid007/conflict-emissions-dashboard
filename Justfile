@@ -50,10 +50,11 @@ ingest-acled date="today":
     fi
     {{compose}} exec wced-api wced ingest acled --date "$d" --yes
 
-# Run fire-event detection (new events land in PENDING_REVIEW).
-# --no-auto-publish stays ON until the confidence-gated publish gate is merged.
+# Run fire-event detection. The confidence-gated publish gate (publish_gate in
+# wced/verify/editorial.py) auto-publishes Confirmed/Verified events and holds
+# Reported/Suspected/Claimed for manual review.
 detect since="2026-02-28":
-    {{compose}} exec wced-api wced detect --since {{since}} --no-auto-publish --yes
+    {{compose}} exec wced-api wced detect --since {{since}} --yes
 
 # Quantify emissions for all published events
 quantify:
@@ -100,6 +101,14 @@ minio-console:
 # Open Prefect UI (prints URL)
 prefect-ui:
     @echo "http://localhost:${PREFECT_PORT:-4200}"
+
+# Deploy to Modal (pixel-probe workspace)
+modal-deploy:
+    modal deploy modal_app.py
+
+# Run Alembic migrations against DATABASE_URL (works with Neon)
+db-upgrade:
+    alembic upgrade head
 
 # Full bootstrap: up, migrate, seed
 bootstrap:

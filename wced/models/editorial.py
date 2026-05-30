@@ -14,7 +14,15 @@ Transitions allowed by the state machine (methodology/v1.0.pdf §5.1):
   │  PENDING_REVIEW      → REJECTED         (reject)          │
   │  REJECTED            → PENDING_REVIEW   (resubmit)        │
   │  PUBLISHED           → RETRACTED        (retract)         │
+  │  PUBLISHED           → PENDING_REVIEW   (anomaly-flag)    │
   └──────────────────────────────────────────────────────────┘
+
+The PUBLISHED → PENDING_REVIEW (anomaly-flag) transition is the
+confidence-gated auto-retract from CLAUDE.md §"Confidence-Gated Auto-Publish
+Policy" gate #5: the ``anomaly-watch`` agent returns an outlier estimate to
+the review queue with a public "under review" note. It is distinct from
+``retract`` (PUBLISHED → RETRACTED, terminal): an anomaly-flagged event can be
+re-approved after an editor resolves the discrepancy.
 
 Prohibited (raise EditorialTransitionError):
   - Approving a REJECTED event directly (must resubmit first).
@@ -45,6 +53,7 @@ class EditorialActionType(str, enum.Enum):
     REJECTED = "REJECTED"
     RESUBMITTED = "RESUBMITTED"
     RETRACTED = "RETRACTED"
+    ANOMALY_FLAGGED = "ANOMALY_FLAGGED"
 
 
 class EditorialAction(BaseModel):
@@ -103,6 +112,7 @@ _TRANSITIONS: dict[tuple[EventStatus, EditorialActionType], EventStatus] = {
     (EventStatus.PENDING_REVIEW, EditorialActionType.SUBMITTED): EventStatus.PENDING_REVIEW,
     (EventStatus.REJECTED, EditorialActionType.RESUBMITTED): EventStatus.PENDING_REVIEW,
     (EventStatus.PUBLISHED, EditorialActionType.RETRACTED): EventStatus.RETRACTED,
+    (EventStatus.PUBLISHED, EditorialActionType.ANOMALY_FLAGGED): EventStatus.PENDING_REVIEW,
 }
 
 

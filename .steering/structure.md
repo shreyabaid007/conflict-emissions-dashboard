@@ -61,6 +61,13 @@ war-emission-tracker/
 │   │   ├── ucdp.py                 # UCDP georeferenced events (historical validation)
 │   │   └── acled.py                # ACLED conflict events (behind feature flag; requires paid access)
 │   │
+│   ├── categories/                 # emission category protocol + plugins
+│   │   ├── __init__.py
+│   │   ├── base.py                 # EmissionCategory Protocol + CategoryRegistry
+│   │   └── oil_fuel_fire/          # oil/fuel fire category (first implementation)
+│   │       ├── __init__.py
+│   │       └── category.py         # OilFuelFireCategory wrapping detect/verify/quantify
+│   │
 │   ├── detect/                     # fire detection logic
 │   │   ├── __init__.py
 │   │   ├── hotspot.py              # FIRMS → candidate fire events

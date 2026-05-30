@@ -79,6 +79,48 @@ class ProvenanceResponse(_Envelope):
     rendered: str
 
 
+class ProvenanceChainResponse(_Envelope):
+    """Standalone provenance chain for any provenance/source id.
+
+    Unlike ``ProvenanceResponse`` this is not scoped to an event — it makes
+    every number on the dashboard click-through-auditable via
+    ``GET /v1/provenance/{id}`` (v2 §6, gap C.8).
+    """
+
+    provenance_id: UUID
+    chain: list[ProvenanceNodeOut]
+    rendered: str
+
+
+class RevisionEntry(BaseModel):
+    """One row of the append-only publication log, surfaced publicly.
+
+    Retractions and restatements are shown, never silently deleted
+    (CLAUDE.md §"Editorial Workflow"). ``public_note`` carries the public
+    "under review" flag set when an estimate is auto-retracted by
+    anomaly-watch.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    target_type: str
+    target_id: UUID
+    from_state: str
+    to_state: str
+    action: str
+    actor: str
+    reason: str | None = None
+    public_note: str | None = None
+    methodology_version: str | None = None
+    created_at: datetime
+
+
+class RevisionLogResponse(_Envelope):
+    data: list[RevisionEntry]
+    pagination: PaginationMeta
+
+
 class EventDetailResponse(_Envelope):
     data: EventSummary
     estimates: list[EmissionEstimateOut]

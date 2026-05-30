@@ -750,3 +750,137 @@ class TestDailyIngestFlow:
         assert len(events) == 1
         assert events[0].facility_id == facility.id
         assert events[0].confidence_label is ConfidenceLabel.REPORTED
+
+
+# ---------------------------------------------------------------------------
+# ENABLE_ACLED feature flag tests
+# ---------------------------------------------------------------------------
+
+
+class TestEnableACLEDFlag:
+    """ACLED connector is inert when WCED_ENABLE_ACLED is off (default)."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_settings_cache(self) -> None:
+        """Clear the lru_cache on get_settings so env patches take effect."""
+        from wced.settings import get_settings
+        get_settings.cache_clear()
+        yield
+        get_settings.cache_clear()
+
+    def test_acled_skipped_when_flag_off(self) -> None:
+        """With ENABLE_ACLED=False (default), ingest_conflict_events should
+        never instantiate ACLEDConnector, even if credentials are present."""
+        from wced.pipeline.daily_ingest import ingest_conflict_events
+        from wced.ingest.gdelt import GDELTEvent
+
+        gdelt_ev = GDELTEvent(
+            event_id="G001",
+            event_date=_RUN_DATE,
+            event_type="190",
+            event_root_code="19",
+            actor1="A",
+            actor2="B",
+            latitude=32.0,
+            longitude=51.0,
+            source_url="https://example.com",
+            num_articles=1,
+            avg_tone=-3.0,
+            goldstein_scale=-5.0,
+            detected_at=_T0,
+        )
+
+        async def _fake_gdelt_query(*a, **kw):
+            yield {"event": gdelt_ev, "_source": make_source(), "detected_at": _T0}
+
+        with (
+            mock.patch.dict(os.environ, {
+                "ACLED_EMAIL": "test@example.com",
+                "ACLED_PASSWORD": "test-password",
+                "WCED_ENABLE_ACLED": "",
+            }),
+            mock.patch(
+                "wced.pipeline.daily_ingest.get_settings",
+                return_value=__import__(
+                    "wced.settings", fromlist=["Settings"]
+                ).Settings(enable_acled=False),
+            ),
+            mock.patch(
+                "wced.pipeline.daily_ingest.ACLEDConnector",
+            ) as acled_cls,
+            mock.patch(
+                "wced.pipeline.daily_ingest.GDELTConnector",
+            ) as gdelt_cls,
+        ):
+            gdelt_instance = mock.AsyncMock()
+            gdelt_instance.query_events_api = _fake_gdelt_query
+            gdelt_cls.return_value.__aenter__ = mock.AsyncMock(return_value=gdelt_instance)
+            gdelt_cls.return_value.__aexit__ = mock.AsyncMock(return_value=None)
+
+            import asyncio
+            events, source_used = asyncio.run(
+                ingest_conflict_events.fn(_RUN_DATE, ["Iran"])
+            )
+
+        acled_cls.assert_not_called()
+        assert source_used == "gdelt"
+        assert len(events) == 1
+
+    def test_acled_source_explicit_raises_when_flag_off(self) -> None:
+        """WCED_CONFLICT_SOURCE=acled with ENABLE_ACLED off should raise."""
+        from wced.pipeline.daily_ingest import ingest_conflict_events
+
+        with (
+            mock.patch.dict(os.environ, {"WCED_CONFLICT_SOURCE": "acled"}),
+            mock.patch(
+                "wced.pipeline.daily_ingest.get_settings",
+                return_value=__import__(
+                    "wced.settings", fromlist=["Settings"]
+                ).Settings(enable_acled=False),
+            ),
+            pytest.raises(RuntimeError, match="WCED_ENABLE_ACLED"),
+        ):
+            import asyncio
+            asyncio.run(
+                ingest_conflict_events.fn(_RUN_DATE, ["Iran"])
+            )
+
+    def test_corroboration_works_with_gdelt_only(self) -> None:
+        """Corroboration still finds matches when only GDELT events present."""
+        from wced.ingest.gdelt import GDELTEvent
+
+        gdelt_ev = GDELTEvent(
+            event_id="G002",
+            event_date=_RUN_DATE,
+            event_type="190",
+            event_root_code="19",
+            actor1="A",
+            actor2="B",
+            latitude=32.001,
+            longitude=51.001,
+            source_url="https://example.com",
+            num_articles=1,
+            avg_tone=-3.0,
+            goldstein_scale=-5.0,
+            detected_at=_T0,
+        )
+
+        mc = make_matched_candidate(lat=32.0, lon=51.0)
+        result = corroborate_with_conflict_events.fn([mc], [gdelt_ev])
+        matches = result[str(mc.candidate.id)]
+        assert len(matches) == 1
+        assert matches[0].source_type == "gdelt"
+
+    def test_settings_enable_acled_default_false(self) -> None:
+        """ENABLE_ACLED defaults to False when env var is not set."""
+        from wced.settings import Settings
+        with mock.patch.dict(os.environ, {}, clear=True):
+            s = Settings.from_env()
+        assert s.enable_acled is False
+
+    def test_settings_enable_acled_true(self) -> None:
+        """ENABLE_ACLED is True when WCED_ENABLE_ACLED=true."""
+        from wced.settings import Settings
+        with mock.patch.dict(os.environ, {"WCED_ENABLE_ACLED": "true"}, clear=True):
+            s = Settings.from_env()
+        assert s.enable_acled is True

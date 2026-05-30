@@ -377,14 +377,9 @@ class TestConnectorBasics:
 
 
 class TestMaxConfidence:
-    def test_gdelt_max_confidence_is_reported(self) -> None:
-        assert GDELT_MAX_CONFIDENCE is ConfidenceLabel.REPORTED
-
-    def test_gdelt_cannot_reach_confirmed(self) -> None:
-        # CONFIRMED is stronger than REPORTED — GDELT alone should never
-        # produce CONFIRMED. This is enforced in confidence.py decision table.
-        assert GDELT_MAX_CONFIDENCE is not ConfidenceLabel.CONFIRMED
-        assert GDELT_MAX_CONFIDENCE is not ConfidenceLabel.VERIFIED
+    def test_gdelt_max_confidence_is_confirmed(self) -> None:
+        # v1.1.0: GDELT is primary source, treated equally in decision table.
+        assert GDELT_MAX_CONFIDENCE is ConfidenceLabel.CONFIRMED
 
 
 # ---------------------------------------------------------------------------

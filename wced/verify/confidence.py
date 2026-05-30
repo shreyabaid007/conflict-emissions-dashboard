@@ -1,38 +1,35 @@
 """Confidence label assignment for fire candidates.
 
 Combines three independent evidence streams — FIRMS persistence, Sentinel-2
-optical classification, and conflict-event corroboration (ACLED or GDELT) —
-into a single :class:`~wced.models.provenance.ConfidenceLabel`. The label
-governs which editorial tier a ``FireEvent`` enters and propagates forward
-into every emission estimate that cites this candidate.
+optical classification, and conflict-event corroboration — into a single
+:class:`~wced.models.provenance.ConfidenceLabel`. The label governs which
+editorial tier a ``FireEvent`` enters and propagates forward into every
+emission estimate that cites this candidate.
 
-Label hierarchy and evidence requirements (methodology/v1.0.pdf §4.3, Table 5):
+Label hierarchy and evidence requirements (methodology v1.1.0, Table 5):
 
   CONFIRMED  — FIRMS persistent (≥2 overpasses) + S2 confirms fire
-               + ≥1 ACLED match within space/time window (or both ACLED + GDELT).
-  VERIFIED   — FIRMS persistent + S2 confirms fire + GDELT match (no ACLED),
-               OR FIRMS persistent + S2 fire (no conflict-event match at all).
-  REPORTED   — FIRMS persistent + no optical confirmation (clouds blocked S2
-               or no clear-sky scene within the search window).
+               + ≥1 conflict-event corroboration (GDELT, ACLED, or any
+               registered source).
+  VERIFIED   — FIRMS persistent + S2 confirms fire (no corroboration),
+               OR FIRMS persistent + corroboration (no S2 fire confirmation).
+  REPORTED   — FIRMS persistent + no optical confirmation + no corroboration.
   SUSPECTED  — FIRMS single-overpass, no other confirmation. May be flaring,
                sensor noise, or a genuine brief fire on the first pass.
   CLAIMED    — Only a state/news source claims an event; no satellite evidence
                exists. Rare in this pipeline (ingested via a future news-triage
                prompt) but must be handled to avoid blocking that path.
 
-Corroboration source strength:
-  - ACLED (human-reviewed) → strong corroboration, can reach CONFIRMED.
-  - GDELT (machine-extracted) → weak corroboration, caps at VERIFIED.
-    GDELT corroboration can never push an event above REPORTED on its own
-    because GDELT is machine-extracted, not human-reviewed.
-  - Both ACLED + GDELT → CONFIRMED (ACLED dominates).
+Corroboration is source-agnostic: any conflict-event source that passes
+spatial/temporal matching is treated equally. GDELT is the primary source;
+ACLED is retained behind a feature flag for future funded access.
 
 Edge case — conflict-event-only: a conflict record with no FIRMS hotspot is
 NOT auto-confirmed. These candidates are flagged SUSPECTED and routed for
 editorial review.
 
-Methodology reference: methodology/v1.0.pdf §4.3 — "Verification and
-Confidence Labels".
+Methodology reference: methodology v1.1.0 — "Verification and Confidence
+Labels".
 """
 from __future__ import annotations
 
@@ -130,18 +127,14 @@ def assign_confidence(
 
     has_any_corroboration = has_acled or has_gdelt
 
-    # --- decision table (methodology/v1.0.pdf §4.3, Table 5) ---
-    # Extended with corroboration source distinction:
-    #   ACLED match → can reach CONFIRMED
-    #   GDELT match only → caps at VERIFIED (one tier lower)
-    #   Both → CONFIRMED (ACLED dominates)
+    # --- decision table (methodology v1.1.0, Table 5) ---
+    # Source-agnostic: any corroboration source is treated equally.
 
-    if persistent and s2_fire and has_acled:
+    if persistent and s2_fire and has_any_corroboration:
         label = ConfidenceLabel.CONFIRMED
-    elif persistent and s2_fire and has_gdelt:
-        # GDELT corroboration caps at VERIFIED — cannot reach CONFIRMED.
-        label = ConfidenceLabel.VERIFIED
     elif persistent and s2_fire:
+        label = ConfidenceLabel.VERIFIED
+    elif persistent and has_any_corroboration:
         label = ConfidenceLabel.VERIFIED
     elif persistent and not s2_fire:
         label = ConfidenceLabel.REPORTED

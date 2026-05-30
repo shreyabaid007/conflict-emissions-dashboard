@@ -68,6 +68,7 @@ def _make_app():
         conn.execute(text("CREATE TABLE s2_chips (id TEXT PRIMARY KEY, event_id TEXT, facility_id TEXT, product_id TEXT, acquisition_date TIMESTAMP, cloud_cover_pct REAL, storage_path TEXT, bands TEXT, fetched_at TIMESTAMP)"))
         conn.execute(text("CREATE TABLE acled_events (id TEXT PRIMARY KEY, acled_id INTEGER UNIQUE, event_date DATE, event_type TEXT, sub_event_type TEXT, country TEXT, admin1 TEXT, admin2 TEXT, location TEXT, latitude REAL, longitude REAL, source TEXT, notes TEXT, raw_json TEXT, ingested_at TIMESTAMP)"))
         conn.execute(text("CREATE TABLE validation_reports (id TEXT PRIMARY KEY, event_id TEXT, tropomi_estimate_p50 REAL NOT NULL, discrepancy_ratio REAL NOT NULL, needs_review INTEGER NOT NULL DEFAULT 0, generated_at TIMESTAMP NOT NULL)"))
+        conn.execute(text("CREATE TABLE publication_log (id TEXT PRIMARY KEY, target_type TEXT NOT NULL, target_id TEXT NOT NULL, from_state TEXT NOT NULL, to_state TEXT NOT NULL, action TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT, methodology_version TEXT, created_at TIMESTAMP NOT NULL)"))
 
     factory = sessionmaker(bind=engine, expire_on_commit=False)
 

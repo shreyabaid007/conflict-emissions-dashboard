@@ -67,6 +67,9 @@ ai = [
 [project.scripts]
 wced = "wced.cli.main:app"
 
+[project.entry-points."wced.categories"]
+oil_fuel_fire = "wced.categories.oil_fuel_fire.category:OilFuelFireCategory"
+
 [tool.hatch.build.targets.wheel]
 packages = ["wced"]
 

@@ -1,5 +1,64 @@
 # Methodology Changelog
 
+## v1.1.0 — 2026-05-30
+
+**Type:** Corroboration source swap + confidence table revision
+
+### ACLED→GDELT Source Swap and Revised Confidence Decision Table
+
+**Problem:** ACLED API access is no longer available on the free academic tier.
+The v1.0.x confidence decision table reserved CONFIRMED for ACLED-corroborated
+events and capped GDELT-only corroboration at VERIFIED, based on ACLED's
+human-reviewed curation vs GDELT's machine-extracted signal. With ACLED
+unavailable, no event could reach CONFIRMED through corroboration alone.
+
+**Changes:**
+
+1. **GDELT promoted to primary conflict-event source.** ACLED connector
+   retained behind feature flag (`WCED_ENABLE_ACLED`) for future funded
+   access but disabled by default.
+
+2. **Confidence decision table revised to be source-agnostic.** Any
+   conflict-event corroboration source that passes spatial/temporal matching
+   (haversine ≤2,000 m, ±24 h) is treated equally in the decision table:
+
+   | Persistent (≥2 passes) | S2 fire | Corroboration (any source) | → Label     |
+   |------------------------|---------|----------------------------|-------------|
+   | yes                    | yes     | ≥1                         | CONFIRMED   |
+   | yes                    | yes     | none                       | VERIFIED    |
+   | yes                    | no      | ≥1                         | VERIFIED    |
+   | yes                    | no      | none                       | REPORTED    |
+   | no                     | *       | *                          | SUSPECTED   |
+
+3. **ACLED-specific "strong" vs "weak" corroboration distinction removed.**
+   The prior table distinguished ACLED (can reach CONFIRMED) from GDELT
+   (caps at VERIFIED). This distinction is replaced by the rule: satellite
+   confirmation (S2 fire) + any corroboration = CONFIRMED.
+
+4. **Pipeline step 4 updated** from `ingest_acled` to source-agnostic
+   `ingest_conflict_events` (GDELT primary, ACLED if enabled). Pipeline
+   step 8 updated from `corroborate_with_acled` to source-agnostic
+   `corroborate_with_conflict_events`.
+
+**Rationale:** The v1.0.x two-tier corroboration strength was justified by
+ACLED's human review process, which filtered false positives that machine
+extraction misses. With ACLED unavailable, we compensate by requiring
+satellite optical confirmation (Sentinel-2 SWIR fire detection) alongside
+any corroboration source to reach CONFIRMED. This maintains the same
+effective bar: two independent lines of evidence (satellite + news) are
+required for the highest confidence tier.
+
+**Impact on existing events:** All existing confidence labels were computed
+under v1.0.x rules. Events previously labeled CONFIRMED via ACLED
+corroboration remain valid (they met a stricter standard). Events previously
+capped at VERIFIED due to GDELT-only corroboration may be upgraded to
+CONFIRMED if they also have S2 fire confirmation. Recompute with
+`wced recompute --methodology-version 1.1.0`.
+
+**Migration:** No data deletion. Existing ACLED-sourced provenance records
+and corroboration matches remain in the database. The feature flag allows
+re-enabling ACLED ingestion if funded access becomes available.
+
 ## v1.0.5 — 2026-05-24
 
 **Type:** Parameter calibration (fraction-destroyed defaults for storage-type facilities)

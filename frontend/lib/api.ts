@@ -278,3 +278,49 @@ export function fetchMethodology(): Promise<MethodologyVersionResponse> {
 export function fetchChangelog(): Promise<ChangelogResponse> {
   return get<ChangelogResponse>("/api/v1/changelog");
 }
+
+// --- Standalone provenance (gap C.8) ---------------------------------------
+
+export interface ProvenanceChainResponse {
+  methodology_version: string;
+  generated_at: string;
+  data_license: string;
+  attribution: string;
+  provenance_id: string;
+  chain: ProvenanceNode[];
+  rendered: string;
+}
+
+export function fetchProvenance(id: string): Promise<ProvenanceChainResponse> {
+  return get<ProvenanceChainResponse>(`/api/v1/provenance/${id}`);
+}
+
+// --- Public revision log (gap 1.5) -----------------------------------------
+
+export interface RevisionEntry {
+  id: string;
+  target_type: string;
+  target_id: string;
+  from_state: string;
+  to_state: string;
+  action: string;
+  actor: string;
+  reason: string | null;
+  public_note: string | null;
+  methodology_version: string | null;
+  created_at: string;
+}
+
+export interface RevisionLogResponse {
+  methodology_version: string;
+  generated_at: string;
+  data_license: string;
+  attribution: string;
+  data: RevisionEntry[];
+  pagination: { total: number; page: number; per_page: number; pages: number };
+}
+
+export function fetchRevisions(targetId?: string): Promise<RevisionLogResponse> {
+  const query = targetId ? `?target_id=${targetId}` : "";
+  return get<RevisionLogResponse>(`/api/v1/revisions${query}`);
+}

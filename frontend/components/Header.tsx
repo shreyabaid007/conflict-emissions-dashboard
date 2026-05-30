@@ -19,6 +19,7 @@ export function Header() {
     { href: "/map", label: "Map" },
     { href: "/methodology", label: "Methodology" },
     { href: "/changelog", label: "Changelog" },
+    { href: "/revisions", label: "Revisions" },
   ];
 
   return (

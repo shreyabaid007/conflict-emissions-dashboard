@@ -193,8 +193,8 @@ class TestReported:
         )
         assert result is ConfidenceLabel.REPORTED
 
-    def test_reported_with_acled_but_no_s2_fire(self) -> None:
-        # ACLED alone can't confirm fire — stays REPORTED (not CONFIRMED).
+    def test_corroboration_without_s2_fire_yields_verified(self) -> None:
+        # Corroboration without S2 fire lifts persistent candidate to VERIFIED.
         store = InMemoryProvenanceStore()
         result = assign_confidence(
             _candidate(n_overpasses=2),
@@ -202,7 +202,7 @@ class TestReported:
             [_acled_match()],
             store=store,
         )
-        assert result is ConfidenceLabel.REPORTED
+        assert result is ConfidenceLabel.VERIFIED
 
 
 class TestSuspected:

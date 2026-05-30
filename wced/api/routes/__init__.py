@@ -3,6 +3,8 @@ from wced.api.routes.aggregates import router as aggregates_router
 from wced.api.routes.events import router as events_router
 from wced.api.routes.facilities import router as facilities_router
 from wced.api.routes.meta import router as meta_router
+from wced.api.routes.provenance import router as provenance_router
+from wced.api.routes.revisions import router as revisions_router
 from wced.api.routes.timeseries import router as timeseries_router
 
 __all__ = [
@@ -10,5 +12,7 @@ __all__ = [
     "events_router",
     "facilities_router",
     "meta_router",
+    "provenance_router",
+    "revisions_router",
     "timeseries_router",
 ]

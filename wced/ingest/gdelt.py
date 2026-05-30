@@ -6,8 +6,9 @@ machine-codified event stream updated every 15 minutes. For WCED, GDELT
 records serve as a corroboration source when ACLED API access is unavailable,
 or as a supplementary signal alongside ACLED.
 
-GDELT is machine-extracted from news text, not human-reviewed. Therefore
-GDELT corroboration can never push an event above REPORTED on its own.
+GDELT is machine-extracted from news text, not human-reviewed. As the
+primary conflict-event source (v1.1.0 methodology), GDELT corroboration
+is treated equally with any other source in the confidence decision table.
 See ``wced.verify.confidence`` for the full decision table.
 
 Two access methods are implemented:
@@ -71,9 +72,9 @@ GDELT_ATTRIBUTION: Final[str] = (
     " ISA Annual Convention."
 )
 
-# GDELT corroboration is machine-extracted, not human-reviewed.
-# It can never push confidence above REPORTED on its own.
-GDELT_MAX_CONFIDENCE: Final[ConfidenceLabel] = ConfidenceLabel.REPORTED
+# Retained for backward compatibility; no longer enforced in the
+# confidence decision table (v1.1.0 methodology treats all sources equally).
+GDELT_MAX_CONFIDENCE: Final[ConfidenceLabel] = ConfidenceLabel.CONFIRMED
 
 # Default DOC API query targeting conflict theatre.
 DEFAULT_DOC_QUERY: Final[str] = (

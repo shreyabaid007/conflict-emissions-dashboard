@@ -6,11 +6,11 @@ Full WCED pipeline for one calendar day. Runs eleven tasks in sequence
   1.  load_facilities           — GeoJSON registry → list[Facility]
   2.  ingest_firms_viirs        — FIRMS VIIRS area CSV → raw rows
   3.  ingest_firms_modis        — FIRMS MODIS area CSV → raw rows
-  4.  ingest_acled              — ACLED API → list[ACLEDEvent]
+  4.  ingest_conflict_events    — GDELT (primary) + ACLED (if enabled) → conflict events
   5.  detect_candidate_events   — cluster + facility match → list[MatchedCandidate]
   6.  fetch_s2_chips_for_candidates — S2 chip download (asyncio parallel)
   7.  classify_fires            — heuristic + Claude (asyncio, rate-limited)
-  8.  corroborate_with_acled    — spatial/temporal ACLED matching
+  8.  corroborate_with_conflict_events — source-agnostic spatial/temporal matching
   9.  assign_confidence_labels  — evidence combination → label per candidate
   10. submit_to_editorial_queue — build FireEvents, push to review queue
   11. log_pipeline_run          — structured metrics, flush seen-hash store
@@ -73,7 +73,9 @@ from wced.models.facility import Facility
 from wced.models.provenance import ConfidenceLabel, ProvenanceRecord, Source, SourceType
 from wced.pipeline.facility_repo import InMemoryFacilityRepository
 from wced.provenance.store import InMemoryProvenanceStore
+from wced.settings import get_settings
 from wced.verify.acled_corroboration import find_acled_corroboration
+from wced.categories.base import DetectionEvent as CategoryDetectionEvent, get_registry, reset_registry
 from wced.verify.confidence import assign_confidence
 from wced.verify.corroboration import CorroborationMatch, find_corroboration
 from wced.verify.editorial import InMemoryReviewQueue
@@ -400,8 +402,12 @@ async def ingest_conflict_events(
     acled_events: list[ACLEDEvent] = []
     gdelt_events: list[GDELTEvent] = []
 
+    settings = get_settings()
+
     # --- ACLED ---
-    use_acled = conflict_source in ("acled", "both", "")
+    # ACLED is behind a feature flag (WCED_ENABLE_ACLED). When off, skip
+    # entirely regardless of WCED_CONFLICT_SOURCE.
+    use_acled = conflict_source in ("acled", "both", "") and settings.enable_acled
     if use_acled:
         acled_email = os.environ.get("ACLED_EMAIL", "")
         acled_password = os.environ.get("ACLED_PASSWORD", "")
@@ -443,6 +449,11 @@ async def ingest_conflict_events(
                 "using GDELT"
             )
             use_acled = False
+
+    if conflict_source == "acled" and not settings.enable_acled:
+        raise RuntimeError(
+            "WCED_CONFLICT_SOURCE=acled but WCED_ENABLE_ACLED is not set"
+        )
 
     # --- GDELT ---
     use_gdelt = conflict_source in ("gdelt", "both") or not use_acled
@@ -920,18 +931,10 @@ def assign_confidence_labels(
 ) -> dict[str, ConfidenceLabel]:
     """Combine three evidence streams into a single ConfidenceLabel per candidate.
 
-    Applies the decision table from ``methodology/v1.0.pdf §4.3 Table 5``,
-    extended with corroboration source distinction (ACLED vs GDELT):
-
-    +-------------------+------------------+-------------+-------------------+
-    | FIRMS persistence | S2 confirms fire | Corr. type  | → label           |
-    +-------------------+------------------+-------------+-------------------+
-    | ≥2 overpasses     | yes              | ACLED       | CONFIRMED         |
-    | ≥2 overpasses     | yes              | GDELT only  | VERIFIED          |
-    | ≥2 overpasses     | yes              | none        | VERIFIED          |
-    | ≥2 overpasses     | no / clouds      | any         | REPORTED          |
-    | 1 overpass        | any              | any         | SUSPECTED         |
-    +-------------------+------------------+-------------+-------------------+
+    Routes through the ``oil_fuel_fire`` category from the registry, which
+    delegates to ``wced.verify.confidence.assign_confidence``. The category
+    layer adds no numeric changes — it is a uniform interface for future
+    multi-category pipelines.
 
     Parameters
     ----------
@@ -950,18 +953,29 @@ def assign_confidence_labels(
     store = InMemoryProvenanceStore()
     labels: dict[str, ConfidenceLabel] = {}
 
+    registry = get_registry()
+    category = registry.get("oil_fuel_fire")
+
+    verify_ctx: dict[str, Any] = {
+        "verified_candidates": verified,
+        "corroboration_matches": corroborations,
+        "provenance_store": store,
+    }
+
     for mc in candidates:
         key = str(mc.candidate.id)
-        s2_result = verified.get(key)
-        corr_matches = corroborations.get(key, [])
-        label = assign_confidence(
-            mc.candidate,
-            s2_result,
-            [],  # empty acled_matches — using corroboration_matches instead
-            corroboration_matches=corr_matches,
-            store=store,
+        det_event = CategoryDetectionEvent(
+            event_id=key,
+            category_id=category.id,
+            data={
+                "candidate": mc.candidate,
+                "facility": mc.facility,
+                "match_distance_m": mc.match_distance_m,
+                "detection_hash": mc.detection_hash,
+            },
         )
-        labels[key] = label
+        result = category.verify(det_event, verify_ctx)
+        labels[key] = ConfidenceLabel(result.confidence_label)
 
     from collections import Counter
 

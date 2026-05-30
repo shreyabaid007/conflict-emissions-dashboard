@@ -46,9 +46,9 @@ This file provides guidance to Claude Code when working with this repository.
 
 See `.steering/structure.md` for the full canonical layout. Key directories:
 - `wced/` — main Python package
-- `wced/ingest/` — data source connectors (firms, acled, gdelt, sentinel2, sentinel5p)
+- `wced/ingest/` — data source connectors (firms, gdelt, sentinel2, sentinel5p, ucdp); acled.py retained behind feature flag
 - `wced/detect/` — fire detection (hotspot, facility_match, baseline, persistence)
-- `wced/verify/` — verification pipeline (sentinel2_check, acled_corroboration, confidence, editorial)
+- `wced/verify/` — verification pipeline (sentinel2_check, corroboration, confidence, editorial); acled_corroboration.py retained behind feature flag
 - `wced/quantify/` — emissions calculations (frp, inventory, factors, aggregate, reconcile, distribution)
 - `wced/ai/` — Claude client wrapper + vision classify
 - `wced/provenance/` — provenance store
@@ -92,7 +92,7 @@ When asked to implement a feature:
 - Using floating-point comparisons without explicit tolerances in tests
 - Caching across methodology versions (cache keys must include methodology version)
 - Hard-coding emission factors in Python (they live in `data/emission_factors.yaml`)
-- Auto-publishing incidents to the dashboard without editorial review for the first 6 months
+- Auto-publishing incidents that bypass the confidence-gated publish policy (see below)
 - Scalar arithmetic on `Distribution` that silently inherits the parent's `provenance_id` — the scalar's own source must be recorded; use `apply_scalar(factor, provenance_id=factor_record_id)` when the scalar comes from `data/emission_factors.yaml`
 
 ## Sensitive Areas — Require Extra Care
@@ -110,6 +110,7 @@ When asked to implement a feature:
 - The methodology PDF must be approved by the Scientific Steering Committee before being released as a version
 - Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities)
 - **Latest live version: v1.0.5**
+- **Pending: v1.1.0** — will record the ACLED→GDELT corroboration source swap and revised confidence decision table. Must be versioned before confidence-gated auto-publish goes live.
 - See `methodology/CHANGELOG.md` for detailed version history
 
 ## Editorial Workflow
@@ -120,6 +121,20 @@ When asked to implement a feature:
 - `wced verify approve/reject/resubmit/retract` commands in `cli/verify.py`
 - `wced verify add-assessment` attaches DamageAssessment to already-published events
 - Never silently delete; always changelog
+
+## Confidence-Gated Auto-Publish Policy
+
+Auto-publishing replaces the earlier blanket "no auto-publish for 6 months" rule. It is safe only because every gate below is enforced **in code**, not in discipline.
+
+1. **Confidence gate.** Only `Confirmed` or `Verified` events (≥2 independent sources OR satellite confirmation) auto-publish. `Reported`, `Suspected`, and `Claimed` events route to a hold queue for manual editorial review.
+2. **Provenance gate.** The publish function rejects any estimate that lacks a complete `ProvenanceRecord` chain.
+3. **Distribution gate.** The publish function rejects any `Distribution` with fewer than 10,000 Monte Carlo samples.
+4. **Cross-method gate.** Bottom-up vs top-down divergence beyond tolerance routes the event to the review queue instead of auto-publishing.
+5. **Anomaly auto-retract.** An `anomaly-watch` process flags outlier estimates and auto-retracts them to `PENDING_REVIEW` with a public "under review" note.
+6. **Audit trail.** Every publish/retract/restate transition is appended to the `publication_log` table (append-only).
+7. **One-command rollback.** `wced verify retract <event_id>` reverses any publication; methodology rollback via `wced recompute --methodology-version`.
+
+**Status:** The code-level publish gate is not yet merged. Until it lands, `--no-auto-publish` remains enforced in the Justfile `detect` recipe.
 
 ## Useful Documents
 

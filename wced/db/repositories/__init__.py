@@ -8,6 +8,8 @@ from wced.db.repositories.editorial import EditorialActionRepository
 from wced.db.repositories.pipeline import PipelineRunRepository
 from wced.db.repositories.ingestion import FirmsDetectionRepository, AcledEventRepository, S2ChipRepository
 from wced.db.repositories.validation import ValidationReportRepository
+from wced.db.repositories.publication_log import PublicationLogRepository
+from wced.db.repositories.recompute import RecomputeRunRepository
 
 __all__ = [
     "PostgisFacilityRepository",
@@ -21,4 +23,6 @@ __all__ = [
     "AcledEventRepository",
     "S2ChipRepository",
     "ValidationReportRepository",
+    "PublicationLogRepository",
+    "RecomputeRunRepository",
 ]

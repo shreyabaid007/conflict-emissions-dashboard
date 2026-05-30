@@ -22,9 +22,9 @@ Prohibited (raise EditorialTransitionError):
   - Any transition out of RETRACTED.
   - Approving or rejecting an already-PUBLISHED event.
 
-CLAUDE.md §"What This Project Is NOT" and §"Editorial Workflow" govern the
-policy. For the first 6 months, NO auto-publish: every event, including
-CONFIRMED-confidence ones, must pass manual editorial review.
+CLAUDE.md §"Editorial Workflow" and §"Confidence-Gated Auto-Publish Policy"
+govern the policy. The v2 policy allows auto-publishing Confirmed/Verified
+events once the code-level publish gate is merged.
 """
 from __future__ import annotations
 

@@ -327,6 +327,42 @@ if _SA_AVAILABLE:
     )
 
     # ------------------------------------------------------------------
+    # publication_log — append-only audit log for publish/retract/restate
+    # ------------------------------------------------------------------
+    publication_log = sa.Table(
+        "publication_log",
+        metadata,
+        sa.Column("id", sa.UUID(as_uuid=True), primary_key=True),
+        sa.Column("target_type", sa.Text, nullable=False),
+        sa.Column("target_id", sa.UUID(as_uuid=True), nullable=False, index=True),
+        sa.Column("from_state", sa.Text, nullable=False),
+        sa.Column("to_state", sa.Text, nullable=False),
+        sa.Column("action", sa.Text, nullable=False),
+        sa.Column("actor", sa.Text, nullable=False),
+        sa.Column("reason", sa.Text, nullable=True),
+        sa.Column("methodology_version", sa.Text, nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    )
+
+    # ------------------------------------------------------------------
+    # recompute_runs — tracks each wced recompute invocation
+    # ------------------------------------------------------------------
+    recompute_runs = sa.Table(
+        "recompute_runs",
+        metadata,
+        sa.Column("id", sa.UUID(as_uuid=True), primary_key=True),
+        sa.Column("methodology_version", sa.Text, nullable=False),
+        sa.Column("date_range_start", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("date_range_end", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("initiator", sa.Text, nullable=False),
+        sa.Column("trigger", sa.Text, nullable=False),
+        sa.Column("events_affected", sa.Integer, nullable=True),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("status", sa.Text, nullable=False),
+    )
+
+    # ------------------------------------------------------------------
     # Composite indexes (beyond single-column indexes defined inline)
     # ------------------------------------------------------------------
     sa.Index("ix_emission_estimates_event_method", emission_estimates.c.event_id, emission_estimates.c.methodology_version)
@@ -347,3 +383,5 @@ else:  # pragma: no cover
     validation_reports = None  # type: ignore[assignment]
     methodology_versions = None  # type: ignore[assignment]
     pipeline_runs = None  # type: ignore[assignment]
+    publication_log = None  # type: ignore[assignment]
+    recompute_runs = None  # type: ignore[assignment]

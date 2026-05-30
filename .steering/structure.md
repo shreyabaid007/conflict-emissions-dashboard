@@ -57,8 +57,9 @@ war-emission-tracker/
 │   │   ├── firms.py                # NASA FIRMS API (NRT + SP archival)
 │   │   ├── sentinel2.py            # Sentinel-2 via Planetary Computer
 │   │   ├── sentinel5p.py           # TROPOMI NO₂/SO₂
-│   │   ├── acled.py                # ACLED conflict events
-│   │   └── gdelt.py                # GDELT news event search
+│   │   ├── gdelt.py                # GDELT conflict events (primary)
+│   │   ├── ucdp.py                 # UCDP georeferenced events (historical validation)
+│   │   └── acled.py                # ACLED conflict events (behind feature flag; requires paid access)
 │   │
 │   ├── detect/                     # fire detection logic
 │   │   ├── __init__.py
@@ -70,7 +71,7 @@ war-emission-tracker/
 │   ├── verify/                     # verification pipeline
 │   │   ├── __init__.py
 │   │   ├── sentinel2_check.py      # optical confirmation
-│   │   ├── acled_corroboration.py  # ACLED conflict event match
+│   │   ├── acled_corroboration.py  # ACLED corroboration (behind feature flag)
 │   │   ├── corroboration.py        # multi-source corroboration logic
 │   │   ├── confidence.py           # confidence label assignment
 │   │   └── editorial.py            # editorial review queue (Postgres + in-memory)
@@ -99,7 +100,7 @@ war-emission-tracker/
 │   │
 │   ├── pipeline/                   # orchestration flows
 │   │   ├── __init__.py
-│   │   ├── daily_ingest.py         # daily FIRMS + ACLED ingest
+│   │   ├── daily_ingest.py         # daily FIRMS + GDELT ingest
 │   │   ├── facility_repo.py        # facility registry management
 │   │   ├── quantification.py       # batch quantification flow
 │   │   └── validation_weekly.py    # weekly TROPOMI validation
@@ -197,7 +198,7 @@ war-emission-tracker/
 │   │   └── pipeline/
 │   ├── fixtures/
 │   │   ├── snapshots/              # known-good test snapshots
-│   │   └── cassettes/              # VCR cassettes for ACLED etc.
+│   │   └── cassettes/              # VCR cassettes for GDELT, FIRMS, etc.
 │   └── methodology/                # tests that implementation matches the PDF
 │       ├── test_eq_3_3_frp_emissions.py
 │       ├── test_eq_3_4_inventory_emissions.py

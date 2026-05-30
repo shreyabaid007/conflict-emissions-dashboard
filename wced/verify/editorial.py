@@ -1,10 +1,9 @@
 """Editorial review queue for fire events.
 
 The ``ReviewQueue`` is the single chokepoint through which every FireEvent
-must pass before it can be published. CLAUDE.md mandates that for the first
-6 months of operation, ALL events — including high-confidence CONFIRMED ones —
-require manual editorial review. ``ReviewQueue`` enforces this: there is no
-``auto_approve`` path.
+must pass before it can be published. The v2 confidence-gated auto-publish
+policy allows auto-publishing Confirmed/Verified events once the publish gate
+is merged; until then, ``--no-auto-publish`` is enforced in the Justfile.
 
 Architecture
 ------------
@@ -14,9 +13,10 @@ Two implementations share one ``ReviewQueueProtocol``:
   State is lost on process restart.
 - ``PostgresReviewQueue`` — stub; implemented once the ORM prompt lands.
 
-Every state-mutating method writes an ``EditorialAction`` record before
-modifying the event's status. The action log is the source of truth; the
-denormalised ``status`` on the event is a read convenience only.
+Every state-mutating method writes an ``EditorialAction`` record AND appends
+to the ``publication_log`` (append-only audit trail). The action log is the
+source of truth; the denormalised ``status`` on the event is a read
+convenience only.
 
 Methodology reference: methodology/v1.0.pdf §5.1 — "Editorial Workflow".
 
@@ -28,7 +28,7 @@ import logging
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from wced.models.editorial import (
     EditorialAction,
@@ -111,6 +111,12 @@ class InMemoryReviewQueue:
     def __init__(self) -> None:
         self._events: dict[UUID, FireEvent] = {}
         self._actions: dict[UUID, list[EditorialAction]] = {}
+        self._publication_log: list[dict] = []
+
+    @property
+    def publication_log(self) -> list[dict]:
+        """Return a copy of the publication log (append-only)."""
+        return list(self._publication_log)
 
     # ------------------------------------------------------------------ public
 
@@ -223,6 +229,10 @@ class InMemoryReviewQueue:
             previous_status=event.status,
             new_status=next_status,
         )
+        self._append_publication_log(
+            target_id=event_id, from_state=event.status,
+            to_state=next_status, action="approve", actor=reviewer,
+        )
         log.info("editorial.approve: event=%s reviewer=%s", event_id, reviewer)
         return updated
 
@@ -273,6 +283,11 @@ class InMemoryReviewQueue:
             notes=reason,
             previous_status=event.status,
             new_status=next_status,
+        )
+        self._append_publication_log(
+            target_id=event_id, from_state=event.status,
+            to_state=next_status, action="reject", actor=reviewer,
+            reason=reason,
         )
         log.info(
             "editorial.reject: event=%s reviewer=%s reason=%r",
@@ -325,6 +340,10 @@ class InMemoryReviewQueue:
             notes=notes,
             previous_status=event.status,
             new_status=next_status,
+        )
+        self._append_publication_log(
+            target_id=event_id, from_state=event.status,
+            to_state=next_status, action="resubmit", actor=reviewer,
         )
         log.info("editorial.resubmit: event=%s reviewer=%s", event_id, reviewer)
         return updated
@@ -381,6 +400,11 @@ class InMemoryReviewQueue:
             previous_status=event.status,
             new_status=next_status,
         )
+        self._append_publication_log(
+            target_id=event_id, from_state=event.status,
+            to_state=next_status, action="retract", actor=reviewer,
+            reason=reason,
+        )
         log.warning(
             "editorial.retract: event=%s reviewer=%s reason=%r",
             event_id, reviewer, reason,
@@ -412,6 +436,28 @@ class InMemoryReviewQueue:
         return len(self._events)
 
     # ----------------------------------------------------------------- private
+
+    def _append_publication_log(
+        self,
+        *,
+        target_id: UUID,
+        from_state: EventStatus,
+        to_state: EventStatus,
+        action: str,
+        actor: str,
+        reason: str | None = None,
+    ) -> None:
+        self._publication_log.append({
+            "id": uuid4(),
+            "target_type": "fire_event",
+            "target_id": target_id,
+            "from_state": from_state.value,
+            "to_state": to_state.value,
+            "action": action,
+            "actor": actor,
+            "reason": reason,
+            "created_at": datetime.now(tz=UTC),
+        })
 
     def _require(self, event_id: UUID) -> FireEvent:
         try:

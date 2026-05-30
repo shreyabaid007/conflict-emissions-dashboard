@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:08.557977Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "e32ce42e-954a-5aa7-91eb-f6fda11818c5",
+    "name": "Bandar Imam Khomeini Petrochemical",
+    "facility_type": "PETROCHEMICAL",
+    "country": "IRN",
+    "capacity_barrels": 500000.0,
+    "operator": "National Petrochemical Company (NPC)",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(49.114 30.437)",
+  "event_count": 10,
+  "total_p50_tco2e": 2684.950672326085
+}

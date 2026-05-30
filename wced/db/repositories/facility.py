@@ -1,30 +1,13 @@
-"""Facility repository — load the bootstrap GeoJSON into a registry store.
+"""Facility repository — in-memory and PostGIS-backed implementations.
 
-Two implementations share one Protocol:
-
-- ``InMemoryFacilityRepository`` — dict-backed; used by tests and by any
-  pipeline component that needs read access without booting Postgres.
-- ``PostgisFacilityRepository`` — stubbed; mirrors the pattern established by
-  ``wced.provenance.store.PostgresProvenanceStore``. The SQL that the
-  full implementation will issue is documented in the method body so the
-  schema migration prompt can fill it in without rediscovering intent.
-
-Both implementations expose ``load_geojson(path)`` so callers can bring the
-bootstrap file (``data/facilities/iran_oil_gas.geojson``) online at startup
-without writing GeoJSON-parsing logic at the call site. The loader is
-schema-validated — any drift between the file and ``facilities.schema.json``
-raises before a single row reaches the store.
-
-Production facility additions never flow through this loader. They enter via
-the editorial workflow (PR + Scientific Steering Committee review) so that
-every registry change is reviewable in git history; the bootstrap is a
-one-time operation.
+Both implementations share one Protocol so callers can swap backends
+without changing application code.
 """
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -33,36 +16,21 @@ from uuid import UUID
 from jsonschema import Draft202012Validator
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
+from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm import Session
 
+from wced.db import models
 from wced.models.facility import Facility, FacilityType
 
 log = logging.getLogger(__name__)
 
-# Default schema path, kept here (rather than imported from scripts/) so that
-# the repository has no dependency on the bootstrap tooling.
 DEFAULT_SCHEMA_PATH = Path(__file__).resolve().parents[3] / "data" / "facilities" / "facilities.schema.json"
 DEFAULT_GEOJSON_PATH = Path(__file__).resolve().parents[3] / "data" / "facilities" / "iran_oil_gas.geojson"
 
 
-# ---------------------------------------------------------------------------
-# GeoJSON → Facility conversion
-# ---------------------------------------------------------------------------
-
-
 def _feature_to_facility(feature: dict[str, Any]) -> Facility:
-    """Map one validated GeoJSON Feature dict onto a ``Facility``.
-
-    The feature's top-level ``id`` becomes the Facility UUID so re-imports
-    produce stable primary keys downstream (the bootstrap script generates
-    these via uuid5 — see ``scripts.bootstrap_facilities.facility_uuid``).
-
-    Raises
-    ------
-    ValueError
-        If the feature lacks an ``id`` (the schema currently makes ``id``
-        optional, but the loader requires it — every persisted Facility must
-        have a stable UUID).
-    """
+    """Map one validated GeoJSON Feature dict onto a ``Facility``."""
     feature_id = feature.get("id")
     if feature_id is None:
         raise ValueError(
@@ -91,13 +59,7 @@ def parse_geojson(
     *,
     schema_path: Path | None = DEFAULT_SCHEMA_PATH,
 ) -> list[Facility]:
-    """Read a facility GeoJSON, schema-validate it, and return Facility rows.
-
-    Validation is mandatory for the bootstrap file: a malformed registry must
-    fail loudly at startup rather than silently producing partial detections
-    later. Pass ``schema_path=None`` only in unit tests that exercise the
-    parsing path with synthetic data.
-    """
+    """Read a facility GeoJSON, schema-validate it, and return Facility rows."""
     payload = json.loads(path.read_text(encoding="utf-8"))
     if schema_path is not None:
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -105,64 +67,19 @@ def parse_geojson(
     return [_feature_to_facility(f) for f in payload["features"]]
 
 
-# ---------------------------------------------------------------------------
-# Repository protocol
-# ---------------------------------------------------------------------------
-
-
 @runtime_checkable
 class FacilityRepository(Protocol):
-    """Interface that every facility-registry backend must satisfy.
+    """Interface that every facility-registry backend must satisfy."""
 
-    The repository is read-mostly: the bootstrap path writes once at startup
-    via ``load_geojson``, after which queries dominate. Mutation outside of
-    bootstrap goes through the editorial workflow, not through this Protocol.
-    """
-
-    def upsert(self, facility: Facility) -> UUID:
-        """Insert or replace a Facility row; return its id."""
-        ...
-
-    def load_geojson(
-        self,
-        path: Path = DEFAULT_GEOJSON_PATH,
-        *,
-        schema_path: Path | None = DEFAULT_SCHEMA_PATH,
-    ) -> int:
-        """Bootstrap-load every feature from a validated GeoJSON file.
-
-        Returns
-        -------
-        int
-            Number of features inserted/replaced.
-        """
-        ...
-
-    def get(self, facility_id: UUID) -> Facility:
-        """Return one Facility by id; raises KeyError if absent."""
-        ...
-
-    def iter_by_country(self, country_iso3: str) -> Iterator[Facility]:
-        """Yield every Facility whose country matches ``country_iso3``."""
-        ...
-
-    def __len__(self) -> int:
-        """Number of facilities currently in the store."""
-        ...
-
-
-# ---------------------------------------------------------------------------
-# In-memory backend
-# ---------------------------------------------------------------------------
+    def upsert(self, facility: Facility) -> UUID: ...
+    def load_geojson(self, path: Path = DEFAULT_GEOJSON_PATH, *, schema_path: Path | None = DEFAULT_SCHEMA_PATH) -> int: ...
+    def get(self, facility_id: UUID) -> Facility: ...
+    def iter_by_country(self, country_iso3: str) -> Iterator[Facility]: ...
+    def __len__(self) -> int: ...
 
 
 class InMemoryFacilityRepository:
-    """Dict-backed FacilityRepository for tests and local development.
-
-    Not thread-safe. ``upsert`` is idempotent on ``Facility.id`` — re-inserting
-    the same UUID replaces the previous row, matching the semantics the
-    PostGIS backend will provide via ``ON CONFLICT (id) DO UPDATE``.
-    """
+    """Dict-backed FacilityRepository for tests and local development."""
 
     def __init__(self) -> None:
         self._rows: dict[UUID, Facility] = {}
@@ -171,20 +88,12 @@ class InMemoryFacilityRepository:
         self._rows[facility.id] = facility
         return facility.id
 
-    def upsert_many(self, facilities: Iterable[Facility]) -> int:
-        """Batched upsert — convenience used by ``load_geojson``."""
-        count = 0
+    def upsert_many(self, facilities: list[Facility]) -> int:
         for f in facilities:
             self.upsert(f)
-            count += 1
-        return count
+        return len(facilities)
 
-    def load_geojson(
-        self,
-        path: Path = DEFAULT_GEOJSON_PATH,
-        *,
-        schema_path: Path | None = DEFAULT_SCHEMA_PATH,
-    ) -> int:
+    def load_geojson(self, path: Path = DEFAULT_GEOJSON_PATH, *, schema_path: Path | None = DEFAULT_SCHEMA_PATH) -> int:
         facilities = parse_geojson(path, schema_path=schema_path)
         n = self.upsert_many(facilities)
         log.info("facility-repo: loaded %d features from %s", n, path)
@@ -204,63 +113,62 @@ class InMemoryFacilityRepository:
     def __len__(self) -> int:
         return len(self._rows)
 
-    def __repr__(self) -> str:
-        return f"InMemoryFacilityRepository(rows={len(self._rows)})"
 
-
-# ---------------------------------------------------------------------------
-# PostGIS backend (stub)
-# ---------------------------------------------------------------------------
-
-
-# DDL applied by the schema migration that paves the way for this repository.
-# Kept here as a string so that the migration prompt has an authoritative
-# reference; the migration itself owns the actual Alembic up/down logic.
-POSTGIS_DDL: str = """
-CREATE EXTENSION IF NOT EXISTS postgis;
-
-CREATE TABLE IF NOT EXISTS facility (
-    id                       UUID PRIMARY KEY,
-    name                     TEXT NOT NULL,
-    facility_type            TEXT NOT NULL,
-    country                  CHAR(3) NOT NULL,
-    geom                     GEOMETRY(Geometry, 4326) NOT NULL,
-    capacity_barrels         DOUBLE PRECISION,
-    capacity_uncertainty_pct DOUBLE PRECISION NOT NULL DEFAULT 30.0,
-    operator                 TEXT,
-    source_url               TEXT NOT NULL,
-    added_at                 TIMESTAMPTZ NOT NULL,
-    notes                    TEXT
-);
-
-CREATE INDEX IF NOT EXISTS facility_geom_gix    ON facility USING GIST (geom);
-CREATE INDEX IF NOT EXISTS facility_country_idx ON facility (country);
-"""
+def _row_to_facility(row: Any) -> Facility:
+    """Convert a SQLAlchemy Row to a Facility Pydantic model."""
+    return Facility(
+        id=row.id,
+        name=row.name,
+        facility_type=FacilityType(row.facility_type),
+        geometry_wkt=row.geometry_wkt,
+        country=row.country,
+        capacity_barrels=row.capacity_barrels,
+        capacity_uncertainty_pct=row.capacity_uncertainty_pct,
+        operator=row.operator,
+        source_url=row.source_url,
+        added_at=row.added_at,
+        notes=row.notes,
+    )
 
 
 class PostgisFacilityRepository:
-    """PostgreSQL + PostGIS backed FacilityRepository.
+    """PostgreSQL + PostGIS backed FacilityRepository."""
 
-    Stubbed pending the database prompt: the methods document the SQL they
-    will issue so the implementing prompt can fill them in without
-    rediscovering the schema. The interface is identical to
-    ``InMemoryFacilityRepository`` so call sites can swap backends.
-    """
-
-    def __init__(self, dsn: str) -> None:
-        self._dsn = dsn
+    def __init__(self, session: Session) -> None:
+        self._session = session
 
     def upsert(self, facility: Facility) -> UUID:
-        """
-        INSERT INTO facility (id, name, facility_type, country, geom, ...)
-        VALUES (%s, %s, %s, %s, ST_GeomFromText(%s, 4326), ...)
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            facility_type = EXCLUDED.facility_type,
-            ...
-        RETURNING id;
-        """
-        raise NotImplementedError("PostgisFacilityRepository not yet implemented")
+        """Insert or update a facility, returning its id."""
+        stmt = pg_insert(models.facilities).values(
+            id=facility.id,
+            name=facility.name,
+            facility_type=facility.facility_type.value,
+            geometry=func.ST_GeomFromText(facility.geometry_wkt, 4326),
+            country=facility.country,
+            capacity_barrels=facility.capacity_barrels,
+            capacity_uncertainty_pct=facility.capacity_uncertainty_pct,
+            operator=facility.operator,
+            source_url=facility.source_url,
+            added_at=facility.added_at,
+            notes=facility.notes,
+        ).on_conflict_do_update(
+            index_elements=["id"],
+            set_={
+                "name": facility.name,
+                "facility_type": facility.facility_type.value,
+                "geometry": func.ST_GeomFromText(facility.geometry_wkt, 4326),
+                "country": facility.country,
+                "capacity_barrels": facility.capacity_barrels,
+                "capacity_uncertainty_pct": facility.capacity_uncertainty_pct,
+                "operator": facility.operator,
+                "source_url": facility.source_url,
+                "added_at": facility.added_at,
+                "notes": facility.notes,
+            },
+        )
+        self._session.execute(stmt)
+        self._session.flush()
+        return facility.id
 
     def load_geojson(
         self,
@@ -268,22 +176,44 @@ class PostgisFacilityRepository:
         *,
         schema_path: Path | None = DEFAULT_SCHEMA_PATH,
     ) -> int:
-        """Parse + validate + batch-COPY the GeoJSON into the ``facility`` table.
-
-        Production implementation should wrap the COPY in a single transaction
-        so a malformed feature near the end of the file does not leave the
-        registry in a half-loaded state.
-        """
-        raise NotImplementedError("PostgisFacilityRepository not yet implemented")
+        """Parse, validate, and batch-upsert GeoJSON facilities."""
+        facilities = parse_geojson(path, schema_path=schema_path)
+        for f in facilities:
+            self.upsert(f)
+        log.info("facility-repo: loaded %d features from %s", len(facilities), path)
+        return len(facilities)
 
     def get(self, facility_id: UUID) -> Facility:
-        """``SELECT … FROM facility WHERE id = %s`` with ST_AsText(geom)."""
-        raise NotImplementedError("PostgisFacilityRepository not yet implemented")
+        """Return one Facility by id; raises KeyError if absent."""
+        t = models.facilities
+        row = self._session.execute(
+            select(
+                t.c.id, t.c.name, t.c.facility_type,
+                func.ST_AsText(t.c.geometry).label("geometry_wkt"),
+                t.c.country, t.c.capacity_barrels, t.c.capacity_uncertainty_pct,
+                t.c.operator, t.c.source_url, t.c.added_at, t.c.notes,
+            ).where(t.c.id == facility_id)
+        ).first()
+        if row is None:
+            raise KeyError(f"Facility not found: id={facility_id}")
+        return _row_to_facility(row)
 
     def iter_by_country(self, country_iso3: str) -> Iterator[Facility]:
-        """``SELECT … FROM facility WHERE country = %s`` — server-side cursor."""
-        raise NotImplementedError("PostgisFacilityRepository not yet implemented")
+        """Yield every Facility whose country matches ``country_iso3``."""
+        t = models.facilities
+        result = self._session.execute(
+            select(
+                t.c.id, t.c.name, t.c.facility_type,
+                func.ST_AsText(t.c.geometry).label("geometry_wkt"),
+                t.c.country, t.c.capacity_barrels, t.c.capacity_uncertainty_pct,
+                t.c.operator, t.c.source_url, t.c.added_at, t.c.notes,
+            ).where(t.c.country == country_iso3)
+        )
+        for row in result:
+            yield _row_to_facility(row)
 
     def __len__(self) -> int:
-        """``SELECT count(*) FROM facility``."""
-        raise NotImplementedError("PostgisFacilityRepository not yet implemented")
+        result = self._session.execute(
+            select(func.count()).select_from(models.facilities)
+        )
+        return result.scalar_one()

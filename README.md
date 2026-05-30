@@ -4,6 +4,13 @@ A near-real-time, publicly auditable dashboard quantifying CO₂ emissions from
 oil and fuel infrastructure fires during the 2026 Iran–US–Israel war, using
 only public satellite data and peer-reviewed emission factors.
 
+**V1 scope:** Oil and fuel infrastructure fire emissions in Iran and the Gulf
+region (28 Feb 2026 – present). Current methodology version: **v1.0.5**.
+
+**Headline number (as of 2026-05-24):** ~75.6 kt CO₂e cumulative (p50) across
+7 Iranian facilities, based on 47 detected fire events (27 with emission
+estimates, 2 fully reconciled FRP vs. inventory).
+
 ## Academic Research Tool Disclaimer
 
 **This is an academic research tool.** It is not a legal accountability
@@ -17,31 +24,41 @@ peer-reviewed; numbers are reproducible from a git-tracked snapshot.
 
 ## Methodology
 
-Full methodology: [`methodology/v1.0.pdf`](methodology/v1.0.pdf) *(placeholder —
-approved by Scientific Steering Committee before publication)*
+Current methodology: [`methodology/v1.0.pdf`](methodology/v1.0.pdf) (base),
+superseded by v1.0.5 (baseline subtraction, fraction-destroyed recalibration).
+See [`methodology/CHANGELOG.md`](methodology/CHANGELOG.md) for the full
+version history.
 
 Emission factors and parameter distributions: [`data/emission_factors.yaml`](data/emission_factors.yaml)
 
 ## Quick Start
 
 ```bash
-# Install uv
+# Install uv and just
 curl -LsSf https://astral.sh/uv/install.sh | sh
+brew install just  # or cargo install just
 
 # Clone and set up
-git clone <repo>
-cd war-carbon-dashboard
+git clone https://github.com/shreyabaid007/conflict-emission-tracker
+cd conflict-emission-tracker
 uv sync
 cp .env.example .env  # fill in API keys
 
-# Run the API (dev)
-uv run uvicorn wced.api.main:app --reload
+# Start the dev stack (Postgres, Redis, MinIO, Prefect, API)
+just bootstrap        # docker compose up + migrate
+
+# Load facility registry
+just facility-load
+
+# Ingest today's FIRMS data and run detection
+just ingest
+just detect
 
 # Run the CLI
 uv run wced --help
 
 # Tests
-uv run pytest tests/ -v
+just test
 ```
 
 ## Data Sources

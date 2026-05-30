@@ -1,0 +1,52 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:34:18.188871Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "event_id": "06ca5ef5-8546-48a6-89b6-1b6cbbe9c662",
+  "chain": [
+    {
+      "node_type": "computation",
+      "id": "720bbe4a-c2f4-5b3a-a537-c1cd632eaebb",
+      "detail": {
+        "produced_by": "wced.quantify.frp",
+        "method": "frp_to_co2_v1.0.5",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-24T09:14:35.599327+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "946498e9-eb66-477f-af1a-7724257455ea",
+      "detail": {
+        "produced_by": "wced.detect.hotspot",
+        "method": "firms_clustering_v1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-03-21T05:42:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "ed2d17af-dab8-5b71-a3d0-053c79681eba",
+      "detail": {
+        "produced_by": "wced.detect.baseline",
+        "method": "rolling_p75_baseline_v1.0.1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-23T00:35:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "source",
+      "id": "af2a328e-2c8a-48ad-a429-fc32f5bd58b6",
+      "detail": {
+        "source_type": "SATELLITE",
+        "identifier": "NASA FIRMS detections for facility South Pars / Asaluyeh gas complex",
+        "retrieved_at": "2026-05-24T11:45:42.973020+00:00"
+      }
+    }
+  ],
+  "rendered": "[COMPUTATION] wced.quantify.frp / frp_to_co2_v1.0.5 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.hotspot / firms_clustering_v1 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.baseline / rolling_p75_baseline_v1.0.1 [REPORTED]\n\u2192 [SATELLITE] NASA FIRMS detections for facility South Pars / Asaluyeh gas complex"
+}

@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:18.973475Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "aee91525-9bed-543e-9629-65e8c986d914",
+    "name": "Shahr-e Rey storage depot",
+    "facility_type": "STORAGE_TANK_FARM",
+    "country": "IRN",
+    "capacity_barrels": null,
+    "operator": "NIOPDC",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((51.439 35.596,51.449 35.596,51.449 35.606,51.439 35.606,51.439 35.596))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

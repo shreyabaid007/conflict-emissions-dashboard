@@ -61,6 +61,13 @@ VIIRS_SOURCES: Final[tuple[str, ...]] = (
 )
 MODIS_SOURCES: Final[tuple[str, ...]] = ("MODIS_NRT",)
 
+# Standard-processing (archival) sources for dates > ~60 days old.
+VIIRS_SP_SOURCES: Final[tuple[str, ...]] = (
+    "VIIRS_SNPP_SP",
+    "VIIRS_NOAA20_SP",
+)
+MODIS_SP_SOURCES: Final[tuple[str, ...]] = ("MODIS_SP",)
+
 # Brightness column names differ by sensor; we normalise to "brightness" (K).
 _VIIRS_BRIGHTNESS_COL: Final[str] = "bright_ti4"
 _MODIS_BRIGHTNESS_COL: Final[str] = "brightness"
@@ -115,20 +122,22 @@ def _coerce_record(row: dict[str, str], brightness_col: str) -> dict[str, object
     return out
 
 
-def _iter_chunks(start: datetime, end: datetime) -> Iterable[tuple[date, int]]:
-    """Yield (anchor_date, day_range) chunks covering [start, end] in ≤10-day spans.
+def _iter_chunks(start: datetime, end: datetime, max_day_range: int = _MAX_DAY_RANGE) -> Iterable[tuple[date, int]]:
+    """Yield (anchor_date, day_range) chunks covering [start, end].
 
     The FIRMS area endpoint is parameterised by a *trailing* day range anchored
     at a single date — the query returns detections for the ``day_range`` days
-    *ending* on the anchor date. We slice the window forward in 10-day blocks
-    from start.date() and emit one (anchor, span) per block.
+    *ending* on the anchor date. We slice the window forward in blocks of
+    ``max_day_range`` from start.date() and emit one (anchor, span) per block.
+
+    NRT sources support up to 10 days; SP (archival) sources support up to 5.
     """
     if end < start:
         raise ValueError(f"end ({end}) must be >= start ({start})")
     cur = start.date()
     last = end.date()
     while cur <= last:
-        span_end = min(cur + timedelta(days=_MAX_DAY_RANGE - 1), last)
+        span_end = min(cur + timedelta(days=max_day_range - 1), last)
         span = (span_end - cur).days + 1
         yield span_end, span
         cur = span_end + timedelta(days=1)
@@ -211,6 +220,30 @@ class FIRMSConnector:
         async for record in self.ingest_modis(start, end, bbox):
             yield record
 
+    async def ingest_archive(
+        self,
+        start: datetime,
+        end: datetime,
+        bbox: BBox,
+    ) -> AsyncIterator[dict]:
+        """Yield archival (standard-processing) VIIRS + MODIS detections.
+
+        Uses SP source identifiers for dates older than ~60 days where
+        NRT products are no longer available. SP sources cap at 5 days per
+        request (vs 10 for NRT).
+        """
+        _SP_MAX_DAYS = 5
+        async for record in self._ingest_sources(
+            VIIRS_SP_SOURCES, start, end, bbox, _VIIRS_BRIGHTNESS_COL,
+            max_day_range=_SP_MAX_DAYS,
+        ):
+            yield record
+        async for record in self._ingest_sources(
+            MODIS_SP_SOURCES, start, end, bbox, _MODIS_BRIGHTNESS_COL,
+            max_day_range=_SP_MAX_DAYS,
+        ):
+            yield record
+
     # ------------------------------------------------------------------ internal
 
     async def _ingest_sources(
@@ -220,11 +253,12 @@ class FIRMSConnector:
         end: datetime,
         bbox: BBox,
         brightness_col: str,
+        max_day_range: int = _MAX_DAY_RANGE,
     ) -> AsyncIterator[dict]:
         if start.tzinfo is None or end.tzinfo is None:
             raise ValueError("FIRMS connector requires timezone-aware start/end")
         for source in sources:
-            for anchor, span in _iter_chunks(start, end):
+            for anchor, span in _iter_chunks(start, end, max_day_range):
                 async for record in self._fetch_one(source, bbox, anchor, span, brightness_col):
                     yield record
 

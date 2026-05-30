@@ -30,22 +30,20 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 
 ## Atmospheric / Dispersion Modeling
 
-- **HYSPLIT** via NOAA's container; called from Python wrapper
-- **FLEXPART** as alternative for sensitivity comparison
-- Both wrapped behind a `DispersionModel` protocol so they're interchangeable
+- **HYSPLIT** via NOAA's container; called from Python wrapper (planned, not yet implemented)
+- Wrapped behind a `DispersionModel` protocol so alternatives can plug in
 
 ## AI / LLM
 
 - **Anthropic Claude API** — claude-opus-4-7 for complex reasoning (OSINT triage on long news articles, multi-source consistency analysis), claude-haiku-4-5 for high-volume classification
+- **OpenRouter** supported as alternative AI provider (`WCED_AI_PROVIDER=openrouter`); auto-detected if only OpenRouter key is set
 - **Structured outputs** via Pydantic models so AI outputs are typed
 - **Token logging** per AI call → provenance record
-- **Prompt versioning** — prompts live in `wced/ai/prompts/` as templates, versioned in git
 - Always set `temperature=0` for deterministic classification tasks; allow higher temperature only for triage/exploration with multiple samples
 
 ## Vision Models
 
-- **Hugging Face transformers** for fine-tuned ViT/CLIP on Sentinel-2 RGB+SWIR composites
-- **Local inference** preferred for high-volume classification (cost + provenance)
+- **Hugging Face transformers** for fine-tuned ViT/CLIP on Sentinel-2 RGB+SWIR composites (V2 planned)
 - **xView2 / SpaceNet** datasets for damage-classification fine-tuning in V2
 
 ## Monte Carlo
@@ -58,7 +56,7 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 
 ### PostgreSQL + PostGIS
 - Authoritative store for facilities, events, estimates, provenance
-- PostGIS for spatial queries (e.g., "fires within 500m of refineries")
+- PostGIS for spatial queries (e.g., "fires within 500m of refineries") via **GeoAlchemy2**
 - Logical replication for read replicas
 
 ### Object storage (MinIO / S3-compatible)
@@ -69,17 +67,16 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 - Analytics queries from CSV/Parquet exports
 - Frontend reads aggregated parquet, never live OLTP
 
-### Redis
-- Rate limit tracking for external API calls (FIRMS, ACLED)
-- Cache for facility geometries
-- Job queue if Prefect is overkill (V1 starts with Prefect)
+## Task Runner: Justfile
 
-## Pipeline Orchestration: Prefect
+- `just` recipes for common dev operations (`just up`, `just detect`, `just quantify`)
+- Wraps `docker compose exec` commands for consistent container execution
+- Replaces ad-hoc shell scripts for pipeline operations
 
-- Python-native (no XML, no decorators that feel alien)
-- Prefect 3.x has good async support
-- Local Prefect server in dev; Prefect Cloud or self-hosted in prod
-- Each Flow is a single responsibility (`daily_firms_ingest`, `weekly_validation`)
+## Pipeline Orchestration
+
+- Python modules in `wced/pipeline/` (`daily_ingest`, `quantification`, `validation_weekly`)
+- CLI commands in `wced/cli/main.py` serve as the primary orchestration interface
 - Flows are idempotent — re-running for a date does not duplicate
 
 ## Observability
@@ -101,8 +98,8 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 
 - **pytest** + pytest-cov + pytest-asyncio
 - **Hypothesis** for property-based tests on `quantify/` invariants
-- **Schemathesis** for API contract testing
 - **VCR.py** for cassette-based ingest tests (no live API calls in CI)
+- **schemathesis** for API contract testing against OpenAPI schema
 
 ## CI/CD
 
@@ -120,9 +117,9 @@ Geospatial + ML + scientific computing ecosystem is Python-native. 3.11 for perf
 
 ## Documentation
 
-- **MkDocs Material** for the public-facing docs site
 - Methodology PDF generated from LaTeX, never edited in Word
 - Auto-generated API docs from FastAPI OpenAPI
+- Steering docs in `.steering/` for Claude Code context
 
 ## Why NOT These Things
 

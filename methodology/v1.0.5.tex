@@ -1,0 +1,619 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{longtable}
+\usepackage{array}
+
+\title{War Carbon Emissions Dashboard\\
+  \large Methodology v1.0.5\\[0.4em]
+  \normalsize\normalfont Working Draft --- Subject to Revision}
+\author{WCED Project}
+\date{Last updated: 2026-05-24}
+
+\begin{document}
+\maketitle
+
+\noindent\emph{This document specifies the current emission estimation
+methodology used by the War Carbon Emissions Dashboard. Equations, parameters,
+and decision rules are subject to revision; each revision increments the
+methodology version and is documented in the accompanying changelog
+(Section~\ref{sec:versions}). An academic preprint with motivation, related
+work, and results is in preparation.}
+
+\vspace{1em}
+
+%-----------------------------------------------------------------------
+\section{Scope}
+%-----------------------------------------------------------------------
+
+WCED v1.0.5 quantifies $\mathrm{CO_2}$ released by hydrocarbon combustion
+at oil and fuel infrastructure in the Iran--Gulf theatre of the 2026
+Iran--Israel--US war. This document specifies the equations, parameter
+priors, verification rules, and reconciliation logic used by the estimation
+system.
+
+Version~1 covers refineries, crude and product depots, and petrochemical
+complexes from 2026-02-28 onward. It does \emph{not} cover
+destroyed-building embodied carbon, munitions embodied carbon, combat
+aviation fuel, shipping rerouting, reconstruction, or non-carbon ecological
+damage; each of those is deferred to a later version. Emission estimates
+represent $\mathrm{CO_2}$ released from observed fires and are not
+attributed to specific belligerents.
+
+%-----------------------------------------------------------------------
+\section{Estimation Framework}
+%-----------------------------------------------------------------------
+
+All emission estimates are expressed as probability distributions
+characterised by a 5th~percentile (p5), median (p50), and 95th~percentile
+(p95), computed by Monte Carlo simulation. Every result carries a
+provenance record tracing it through a chain of inputs back to primary
+satellite observations; no estimate is published as a scalar without bounds.
+
+Each fire event is assigned a confidence label that reflects the evidence
+supporting it. Labels are defined in Section~\ref{sec:verify} and propagate
+forward into every downstream emission estimate, so the uncertainty
+associated with event identification is never decoupled from the reported
+emission range.
+
+The two core emission methods---Fire Radiative Power (FRP)-based
+(Section~\ref{sec:frp}) and inventory-based
+(Section~\ref{sec:inventory})---are computed independently and then
+reconciled (Section~\ref{sec:reconcile}). All emission factors and
+parameter prior distributions are maintained in versioned reference tables
+external to the estimation logic; they are not hard-coded.
+
+%-----------------------------------------------------------------------
+\section{Emission Calculations}
+%-----------------------------------------------------------------------
+
+\subsection*{Sections 3.1--3.2\enspace(reserved)}
+Facility registry schema and emission factor tables are maintained as
+versioned reference data and are not reproduced here.
+
+%-----------------------------------------------------------------------
+\subsection{FRP-based Method}
+\label{sec:frp}
+%-----------------------------------------------------------------------
+
+Fire Radiative Power (FRP) observations from VIIRS, MODIS, and Sentinel-3
+SLSTR are clustered into an event-level time series from which a total fire
+radiative energy is derived. The method proceeds in four stages: raw energy
+integration, baseline subtraction, overpass-gap correction, and conversion
+to $\mathrm{CO_2}$ mass.
+
+\paragraph{Stage 1: Raw energy integration.}
+The pipeline begins from satellite FRP observations sampled at overpass
+times. The raw Fire Radiative Energy is the trapezoidal integral over the
+observation window:
+\begin{equation}
+I_{\mathrm{raw}} \;=\; \int_{t_0}^{t_1} \mathrm{FRP}(t)\,\mathrm{d}t.
+\label{eq:fre-raw}
+\end{equation}
+
+\paragraph{Stage 2: Pre-war baseline subtraction.}
+The raw integral over-counts because operating facilities flare routinely.
+A facility-specific pre-war baseline is subtracted to isolate the
+conflict-attributable signal. The baseline is derived from 12 months of
+archival satellite observations preceding the conflict
+(2025-02-28 to 2026-02-27).
+
+For each facility, the rolling 30-day pre-war baseline FRP and its
+uncertainty are:
+\begin{align}
+\mathrm{FRP}_{\mathrm{baseline}} &=
+  P_{75}\!\bigl(\{\mathrm{FRP}_i\}_{i \in W_{30}}\bigr),
+\label{eq:baseline} \\
+\sigma_{\mathrm{baseline}} &=
+  \mathrm{IQR}\!\bigl(\{\mathrm{FRP}_i\}\bigr) \big/ 1.349,
+\label{eq:baseline-std}
+\end{align}
+where $W_{30}$ is the 30-day window preceding the event, $P_{75}$ denotes
+the 75th percentile (capturing the upper envelope of routine operations),
+and the IQR-based estimator provides a robust standard deviation resistant
+to transient flare-ups. The net energy available for conflict attribution
+is:
+\begin{equation}
+I_{\mathrm{net}} = \max\!\bigl(0,\;
+  I_{\mathrm{raw}} - \mathrm{FRP}_{\mathrm{baseline}} \cdot \Delta t\bigr),
+\label{eq:net-frp}
+\end{equation}
+where $\Delta t$ is the event duration in days. Events for which the
+30-day window contains fewer than five observations use a conservative
+fallback baseline ($\mu = 0$~MW, $\sigma = 50$~MW) and are flagged as
+having insufficient baseline history.
+
+\paragraph{Stage 3: Overpass-gap correction.}
+Satellites sample at discrete overpass times. Two multiplicative corrections
+account for fire activity in unobserved intervals and for residual sampling
+bias. The corrected Fire Radiative Energy is:
+\begin{equation}
+I_{\mathrm{FRE}} \;=\; k_{\mathrm{ext}} \cdot d \cdot I_{\mathrm{net}},
+\label{eq:fre}
+\end{equation}
+where $d$ is the burn duty cycle, representing the fraction of time the
+fire is active between overpasses (prior: triangular(0.40, 0.70, 0.95);
+informed by the Kuwait 1991 and Abqaiq 2019 oil-facility fires), and
+$k_{\mathrm{ext}}$ is an extrapolation factor correcting residual bias
+when overpass sampling is sparse (prior: $\mathcal{N}(1.0,\,0.15)$,
+calibrated against MODIS/VIIRS cross-comparisons). Both parameters are
+sampled independently in the Monte Carlo (Section~\ref{sec:uq}); applying
+either as a point value before sampling would systematically narrow the
+resulting uncertainty interval. $I_{\mathrm{net}}$ and $I_{\mathrm{FRE}}$
+both carry units of MJ.
+
+\paragraph{Stage 4: Conversion to $\mathrm{CO_2}$ mass.}
+Corrected energy converts to fuel mass through a calibrated coefficient,
+then to $\mathrm{CO_2}$ mass through combustion stoichiometry:
+\begin{align}
+m_{\mathrm{fuel}} &= \alpha \cdot I_{\mathrm{FRE}},
+\label{eq:fuel}\\
+m_{\mathrm{CO_2}} &= m_{\mathrm{fuel}} \cdot \beta \cdot r,
+\label{eq:co2-frp}
+\end{align}
+where $\alpha$ is the FRP-to-combustion-rate coefficient
+($\mathcal{N}(0.368,\,0.05)$~kg/MJ; Wooster et al.~\cite{wooster2005}),
+$\beta = (44/12)\cdot f_C$ is the stoichiometric
+$\mathrm{C}\!\to\!\mathrm{CO_2}$ conversion factor with $f_C \approx 0.86$
+the carbon mass fraction of crude oil (EPA AP-42; \cite{ap42}), and $r$ is
+the carbon recovery fraction (triangular(0.92, 0.96, 0.98);
+Hobbs \& Radke~\cite{hobbs1992}). At central prior values,
+$\beta \cdot r \approx 3.15$~kg$\,\mathrm{CO_2}$ per kg crude burned,
+consistent with the value used in the CCI Iran brief
+\cite{bigger2026,cci2026}.
+
+%-----------------------------------------------------------------------
+\subsection{Inventory-based Method}
+\label{sec:inventory}
+%-----------------------------------------------------------------------
+
+For facilities with a curated nameplate capacity $C$ (barrels), a
+bottom-up estimate is computed from:
+\begin{equation}
+m_{\mathrm{CO_2}} \;=\; C \cdot \phi \cdot \psi \cdot \mathrm{EF},
+\label{eq:co2-inv}
+\end{equation}
+where $\phi$ is the fraction of nameplate capacity present at the time of
+the strike (prior: uniform(0.30, 0.90); a judgment-based prior pending
+empirical calibration), $\psi$ is the destroyed fraction, and
+$\mathrm{EF}$ is the combustion emission factor for the relevant product:
+
+\begin{itemize}
+\item Crude depots and refinery crude units:
+  $\mathrm{EF} = 0.425$~tCO$_2$/barrel
+  (EPA AP-42 \S1.3; consistent with CCI Iran brief \cite{cci2026}).
+\item Refined-product depots:
+  $\mathrm{EF} = 0.430$~tCO$_2$/barrel
+  (IPCC 2006 Guidelines, Vol.~2, Ch.~1, Table~1.3; \cite{ipcc2006}).
+\end{itemize}
+
+Each emission factor is designated applicable to specific facility types
+only; type-factor mismatches are rejected at the estimation stage. Applying
+a crude-oil factor to a gas-processing facility would produce
+systematically incorrect results and is therefore prohibited.
+
+\paragraph{Facility-type restriction.}
+The inventory method applies only to storage-type facilities
+(oil depots, storage tank farms, and refineries) where nameplate capacity
+represents stored inventory. It does not apply to production or processing
+facilities (gas processing plants, petrochemical complexes) where capacity
+represents throughput and on-site inventory is a small fraction of stated
+capacity. Events at production facilities use the FRP-based method
+exclusively.
+
+\paragraph{Destroyed-fraction prior (v1.0.5 recalibration).}
+The parameter $\psi$ is event-specific: when a reviewer provides an
+explicit assessment $\hat\psi$ from before/after satellite imagery, the
+prior centres on that value using triangular$(\hat\psi - 0.15,\;
+\hat\psi,\; \hat\psi + 0.15)$, truncated to $[0,1]$. When no assessment
+is available, the v1.0.5 defaults in Table~\ref{tab:psi} apply.
+
+The defaults were recalibrated in v1.0.5 after systematic FRP/inventory
+agreement ratios of 2.7--7.4$\times$ were observed under earlier defaults,
+indicating that initial priors substantially over-estimated the fraction of
+storage capacity destroyed in a typical strike:
+
+\begin{table}[h]
+\centering
+\caption{Fraction-destroyed default priors by facility type and
+  methodology version.}
+\label{tab:psi}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Facility type} & \textbf{Prior v1.0--v1.0.4}
+  & \textbf{Prior v1.0.5} & \textbf{Basis} \\
+\midrule
+Oil depot             & tri(0.20, 0.40, 0.65)
+  & tri(0.05, 0.15, 0.30) & FRP/inv ratio calibration \\
+Storage tank farm     & tri(0.20, 0.40, 0.65)
+  & tri(0.05, 0.15, 0.30) & Same \\
+Refinery              & tri(0.10, 0.20, 0.35)
+  & tri(0.05, 0.15, 0.30) & Same \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The recalibrated mode of 0.15 reflects that strikes typically produce
+localised tank fires rather than facility-wide destruction, consistent
+with post-strike optical satellite imagery.
+
+%-----------------------------------------------------------------------
+\subsection{Reconciliation}
+\label{sec:reconcile}
+%-----------------------------------------------------------------------
+
+Where both methods are applicable, they yield independent Monte Carlo
+distributions. Reconciliation follows three rules based on the ratio
+$\rho = m_{\mathrm{CO_2}}^{\mathrm{inv,p50}}\,/\,
+m_{\mathrm{CO_2}}^{\mathrm{frp,p50}}$:
+
+\textbf{Agreement} ($0.5 \le \rho \le 2.0$): both estimates are
+published and the headline emission is the envelope distribution, formed
+by pooling the Monte Carlo samples from both methods ($2N = 20{,}000$
+draws) and computing p5/p50/p95 over the combined set. This approach
+captures both within-method parametric uncertainty and between-method
+structural uncertainty in a single distribution, without averaging away
+genuine disagreement.
+
+\textbf{Disagreement} ($\rho < 0.5$ or $\rho > 2.0$): both estimates
+are retained but neither is published as a headline figure until editorial
+review resolves the discrepancy. A written reviewer note must be entered
+in the public changelog before publication.
+
+\textbf{Third-party cross-check}: emission estimates from external sources
+(e.g.\ CEOBS, CCI, or government statements) are recorded as
+reference values only and do not enter headline arithmetic.
+
+Events where $\rho$ falls within 10\% of either threshold
+($\rho \in [0.50, 0.55] \cup [1.82, 2.00]$) are flagged for additional
+editorial scrutiny even though they formally satisfy the agreement
+criterion.
+
+%-----------------------------------------------------------------------
+\section{Verification and Confidence Assignment}
+\label{sec:verify}
+%-----------------------------------------------------------------------
+
+Each candidate fire event is assessed against three independent evidence
+streams:
+\begin{itemize}
+\item \textbf{Satellite persistence}: whether two or more independent
+  satellite overpasses detect a hotspot at the same location.
+\item \textbf{Optical confirmation}: whether a cloud-free Sentinel-2
+  scene, acquired within $\pm$72 hours of the detected event, confirms
+  active combustion.
+\item \textbf{Conflict corroboration}: whether a documented armed event
+  from a curated conflict database falls within a 24-hour, 2-kilometre
+  spatio-temporal window of the detected fire.
+\end{itemize}
+
+Table~\ref{tab:confidence} defines the resulting confidence labels.
+
+\begin{table}[h]
+\centering
+\caption{Confidence label decision table (v1.0.5).}
+\label{tab:confidence}
+\begin{tabular}{@{}lcccp{4.5cm}@{}}
+\toprule
+\textbf{Label} & \textbf{Persistent} &
+\textbf{Optical} & \textbf{Conflict} & \textbf{Notes} \\
+\midrule
+\textsc{confirmed}  & yes & yes & yes & All three streams agree \\
+\textsc{verified}   & yes & yes & no  & Satellite-only; no conflict record \\
+\textsc{reported}   & yes & no  & any & Cloud cover or ambiguous scene \\
+\textsc{suspected}  & no  & --- & any & Conflict record alone never auto-promotes \\
+\textsc{suspected}  & no  & --- & no  & Single overpass only \\
+\textsc{claimed}    & --- & --- & --- & News or official statement only; no satellite evidence \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The persistence threshold is two or more overpasses with elevated thermal
+signal. Conflict-record corroboration alone is intentionally
+non-promoting: a reported armed event near a facility without satellite
+confirmation may represent a near-miss, a non-incendiary strike, or a
+positional error in the conflict record. Such candidates are withheld from
+publication pending review.
+
+Only \textsc{confirmed} and \textsc{verified} events contribute to the
+headline emission total. \textsc{reported} events appear on the public map
+with a distinct marker. \textsc{suspected} and \textsc{claimed} events are
+withheld pending review.
+
+%-----------------------------------------------------------------------
+\section{Uncertainty Quantification}
+\label{sec:uq}
+%-----------------------------------------------------------------------
+
+Every emission estimate is the output of a Monte Carlo simulation with
+$N = 10{,}000$ independent draws. Parameter prior distributions are
+specified in Table~\ref{tab:priors}; they are not hard-coded in the
+estimation logic and can be updated independently of it.
+
+\begin{table}[h]
+\centering
+\caption{Monte Carlo parameter priors.}
+\label{tab:priors}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Prior distribution} & \textbf{Units} &
+\textbf{Source} \\
+\midrule
+Crude oil combustion factor
+  & triangular(0.405, 0.425, 0.445)
+  & tCO$_2$/barrel & EPA AP-42 \S1.3 \cite{ap42} \\
+Refined product combustion factor
+  & triangular(0.410, 0.430, 0.455)
+  & tCO$_2$/barrel & IPCC 2006 GL Vol.~2 \cite{ipcc2006} \\
+FRP-to-combustion rate, $\alpha$
+  & $\mathcal{N}(0.368,\;0.05)$
+  & kg/MJ & Wooster et al.~\cite{wooster2005} \\
+Carbon recovery, $r$
+  & triangular(0.92, 0.96, 0.98)
+  & --- & Hobbs \& Radke~\cite{hobbs1992} \\
+Burn duty cycle, $d$
+  & triangular(0.40, 0.70, 0.95)
+  & --- & Expert prior (Kuwait 1991; Abqaiq 2019) \\
+Facility inventory at strike, $\phi$
+  & uniform(0.30, 0.90)
+  & --- & Judgment-based prior \\
+FRP extrapolation factor, $k_{\mathrm{ext}}$
+  & $\mathcal{N}(1.0,\;0.15)$
+  & --- & MODIS/VIIRS cross-comparison \\
+Fraction destroyed, $\psi$ (storage; default)
+  & triangular(0.05, 0.15, 0.30)
+  & --- & FRP/inventory ratio calibration (v1.0.5) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Distribution semantics.}
+Triangular distributions are parameterised as (low, mode, high). Where
+asymmetric bounds are not explicitly specified, symmetric bounds around the
+central value are assumed. Normal distributions use the stated standard
+deviation; reported uncertainty bounds in the source literature are stored
+for reviewer cross-check but are not used as truncation bounds.
+
+\paragraph{Independence assumptions.}
+Parameters are sampled independently for each event. Correlation of
+parameters across facilities---for example, systematic satellite calibration
+drift affecting all events simultaneously---is a planned extension for a
+later version.
+
+\paragraph{Aggregation.}
+Facility-level and theatre-level aggregates are computed by element-wise
+summation of per-event Monte Carlo sample arrays, then summarised to
+p5/p50/p95. This approach correctly propagates uncertainty through the
+summation rather than summing individual percentiles, which would
+understate aggregate uncertainty by assuming all events simultaneously
+attain their extreme values.
+
+%-----------------------------------------------------------------------
+\section{Methodology Version History}
+\label{sec:versions}
+%-----------------------------------------------------------------------
+
+\begin{longtable}{@{}lllcp{6.5cm}@{}}
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Type}
+  & \textbf{Param.\ change} & \textbf{Summary} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Version} & \textbf{Date} & \textbf{Type}
+  & \textbf{Param.\ change} & \textbf{Summary} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+v1.0
+  & 2026-03-01 & Initial & yes
+  & Raw FRP method, inventory method, reconciliation, and confidence
+    labels established. \\[4pt]
+v1.0.1
+  & 2026-05-24 & Calibration & yes
+  & Baseline subtraction introduced: 75th-percentile rolling baseline
+    with IQR-based robust standard deviation. Net FRP computed prior to
+    Monte Carlo sampling. Conservative fallback baseline for events with
+    insufficient pre-war observations. \\[4pt]
+v1.0.2
+  & 2026-05-24 & Data & no
+  & Twelve months of pre-war archival satellite observations ingested.
+    No equation or parameter change; baseline window now has sufficient
+    historical coverage for all tracked facilities. \\[4pt]
+v1.0.3
+  & 2026-05-24 & Recompute & no
+  & Full recomputation under v1.0.2 baselines. FRP/inventory agreement
+    ratios of 2.7--7.4$\times$ observed for storage-type facilities,
+    indicating systematic overestimation of fraction destroyed. No
+    parameter change. \\[4pt]
+v1.0.4
+  & 2026-05-24 & Recompute & no
+  & Confirmed systematic overestimation with additional data. No parameter
+    change. \\[4pt]
+v1.0.5
+  & 2026-05-24 & Calibration & yes
+  & Fraction-destroyed defaults for storage-type facilities recalibrated
+    to triangular(0.05, 0.15, 0.30). Damage assessment records updated
+    to reflect recalibrated defaults. \\
+\bottomrule
+\end{longtable}
+
+\noindent This document supersedes methodology v1.0 (2026-05-23). All
+equation numbers are unchanged relative to v1.0; material changes are in
+Section~\ref{sec:frp} (baseline subtraction made explicit),
+Section~\ref{sec:inventory} (facility-type restriction and
+fraction-destroyed recalibration), Section~\ref{sec:reconcile} (envelope
+distribution defined), and this section (version history added).
+
+%-----------------------------------------------------------------------
+\section{Worked Example: Ahvaz/Karoon, 2026-02-28}
+\label{sec:example}
+%-----------------------------------------------------------------------
+
+\paragraph{Context.}
+As of 2026-05-24, the system has processed 47 fire events across 7 Iranian
+facilities under methodology v1.0.5. Of these, 27 events have FRP-based
+emission estimates; a subset also carry inventory-based estimates. Two
+events are fully reconciled ($\rho \in [0.5, 2.0]$); none are flagged as
+requiring review. The cumulative headline is
+${\sim}75{,}619$~tCO$_2$e (p50) across all tracked facilities.
+
+\paragraph{Event.}
+The Ahvaz/Karoon production area event of 2026-02-28 is the largest single
+event in the current dataset. Its inputs are:
+\begin{itemize}
+\item Peak FRP: 114~MW.
+\item Duration: 6.5~days.
+\item Raw FRP integral: $I_{\mathrm{raw}} = 2.893 \times 10^{7}$~MJ
+  ($\approx 28{,}930$~GJ), from VIIRS and MODIS overpasses.
+\item Pre-war baseline: $P_{75} = 13.59$~MW (from 12 months of archival
+  observations at this facility).
+\item Destroyed-fraction assessment: triangular(0.05, 0.15, 0.30)
+  (v1.0.5 default; no reviewer-assessed $\hat\psi$ available).
+\item Confidence label: \textsc{reported} (satellite-persistent but no
+  cloud-free optical confirmation obtained for this event window).
+\end{itemize}
+
+\paragraph{FRP-based point estimate.}
+The following uses central prior values
+($k_{\mathrm{ext}} = 1.0$, $d = 0.70$, $\alpha = 0.368$~kg/MJ) to
+illustrate the equation chain before Monte Carlo sampling.
+
+\noindent\emph{Stage 2 --- Baseline subtraction}
+(Eq.~\eqref{eq:net-frp}):
+\begin{align*}
+I_{\mathrm{net}}
+  &= I_{\mathrm{raw}}
+     - \mathrm{FRP}_{\mathrm{baseline}} \cdot \Delta t \\
+  &= 2.893 \times 10^{7}
+     - 13.59\;\mathrm{MW}
+       \times 6.5\;\mathrm{d}
+       \times 86{,}400\;\mathrm{s\,d^{-1}} \\
+  &= 2.893 \times 10^{7} - 7.634 \times 10^{6} \\
+  &= 2.130 \times 10^{7}\;\text{MJ}.
+\end{align*}
+
+\noindent\emph{Stage 3 --- Overpass-gap correction}
+(Eq.~\eqref{eq:fre}):
+\begin{align*}
+I_{\mathrm{FRE}}
+  &= k_{\mathrm{ext}} \cdot d \cdot I_{\mathrm{net}}
+   = 1.0 \times 0.70 \times 2.130 \times 10^{7}
+   = 1.491 \times 10^{7}\;\text{MJ}.
+\end{align*}
+
+\noindent\emph{Stage 4 --- Conversion to $\mathrm{CO_2}$ mass}
+(Eqs.~\eqref{eq:fuel} and~\eqref{eq:co2-frp}):
+\begin{align*}
+m_{\mathrm{fuel}}
+  &= 0.368 \times 1.491 \times 10^{7}
+   = 5{,}487\;\text{t fuel}, \\
+m_{\mathrm{CO_2}}^{\mathrm{frp}}
+  &= 5{,}487 \times 3.15
+   = 17{,}284\;\text{tCO}_2\text{e}.
+\end{align*}
+
+\paragraph{Monte Carlo result.}
+The point estimate (17,284~tCO$_2$e) falls between the fifth percentile
+and median of the full Monte Carlo distribution, as expected: the right
+skew in $d$ and $k_{\mathrm{ext}}$ pulls the median above the product of
+central values. The realised distribution from the live system is:
+
+\begin{center}
+\begin{tabular}{@{}ccc@{}}
+\toprule
+p5 & p50 & p95 \\
+\midrule
+10,679~tCO$_2$e & 22,704~tCO$_2$e & 55,788~tCO$_2$e \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent This event is classified as \textsc{reported} rather than
+\textsc{verified} or \textsc{confirmed} because no cloud-free Sentinel-2
+scene was obtained for the 28~February event window. Its contribution to
+the headline dashboard total is included, but its higher confidence
+threshold will be revisited if optical imagery becomes available.
+
+%-----------------------------------------------------------------------
+\begin{thebibliography}{14}
+%-----------------------------------------------------------------------
+
+\bibitem{ap42}
+  U.S.\ Environmental Protection Agency.
+  \emph{AP-42: Compilation of Air Emissions Factors},
+  Section~1.3 (fuel oil combustion). EPA.
+
+\bibitem{ipcc2006}
+  IPCC (2006).
+  \emph{2006 IPCC Guidelines for National Greenhouse Gas Inventories},
+  Volume~2, Chapter~1, Table~1.3. IPCC.
+
+\bibitem{wooster2005}
+  Wooster, M.J., Roberts, G., Perry, G.L.W., Kaufman, Y.J. (2005).
+  Retrieval of biomass combustion rates and totals from fire radiative
+  power observations.
+  \emph{Journal of Geophysical Research}, 110, D24311.
+
+\bibitem{hobbs1992}
+  Hobbs, P.V., Radke, L.F. (1992).
+  Airborne studies of the smoke from the Kuwait oil fires.
+  \emph{Science}, 256(5059), 987--991.
+
+\bibitem{cci2026}
+  Climate and Community Institute (2026).
+  \emph{Iran 14-day conflict emissions brief}. CCI.
+
+\bibitem{ceobs}
+  Conflict and Environment Observatory (2026).
+  Incident records, Iran conflict.
+  \url{https://ceobs.org}.
+
+\bibitem{elvidge2016}
+  Elvidge, C.D., Zhizhin, M., Hsu, F.-C., Baugh, K. (2016).
+  Methods for global survey of natural gas flaring from Visible Infrared
+  Imaging Radiometer Suite data.
+  \emph{Energies}, 9(1), 14.
+
+\bibitem{freeborn2014}
+  Freeborn, P.H., Wooster, M.J., Roberts, G. (2014).
+  Addressing the spatiotemporal sampling design of MODIS to provide
+  estimates of the fire radiative energy emitted from Africa.
+  \emph{Remote Sensing of Environment}, 140, 697--734.
+
+\bibitem{neimark2026}
+  Neimark, B., Otu-Larbi, F., Bigger, P. (2026).
+  Carbon emissions from the Gaza war.
+  \emph{One Earth}.
+
+\bibitem{deklerk2024}
+  De Klerk, L., Shlapak, M., Krakovska, S.\ et al.\ (2024).
+  \emph{Guidance on the Assessment of Conflict-Related GHG Emissions,
+  v1.0}. Initiative on GHG Accounting of War / Ecoaction.
+
+\bibitem{bigger2026}
+  Bigger, P., Neimark, B., Otu-Larbi, F. (2026).
+  Two weeks of war in Iran unleashed more carbon pollution than Iceland.
+  Climate and Community Institute Research Snapshot.
+
+\bibitem{cottrell2022}
+  Cottrell, L. (2022).
+  A framework for military greenhouse gas emissions reporting.
+  Conflict and Environment Observatory (CEOBS).
+
+\bibitem{vandenhoek2024}
+  Van Den Hoek, J., Scher, C. (2024).
+  Sentinel-1 SAR coherent change detection for conflict damage assessment.
+  Oregon State University Conflict Ecology Lab.
+
+\bibitem{crawford2019}
+  Crawford, N. (2019).
+  \emph{Pentagon Fuel Use, Climate Change, and the Costs of War}.
+  Costs of War Project, Brown University.
+
+\end{thebibliography}
+
+\end{document}

@@ -1,0 +1,52 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:33:21.594553Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "event_id": "06879e05-f11d-481b-b444-b2b59d59d859",
+  "chain": [
+    {
+      "node_type": "computation",
+      "id": "66027818-66bb-5ecb-ad53-f2d31a81eefc",
+      "detail": {
+        "produced_by": "wced.quantify.frp",
+        "method": "frp_to_co2_v1.0.5",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-24T09:14:35.656167+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "68805bbe-73f6-4943-9397-c3f96e424cab",
+      "detail": {
+        "produced_by": "wced.detect.hotspot",
+        "method": "firms_clustering_v1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-23T00:35:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "43152cef-1510-50be-a799-25579f457e6e",
+      "detail": {
+        "produced_by": "wced.detect.baseline",
+        "method": "rolling_p75_baseline_v1.0.1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-23T00:35:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "source",
+      "id": "de10f583-1d25-4682-999b-eac9e9d39e52",
+      "detail": {
+        "source_type": "SATELLITE",
+        "identifier": "NASA FIRMS detections for facility Aghajari oil field",
+        "retrieved_at": "2026-05-24T11:45:42.973020+00:00"
+      }
+    }
+  ],
+  "rendered": "[COMPUTATION] wced.quantify.frp / frp_to_co2_v1.0.5 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.hotspot / firms_clustering_v1 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.baseline / rolling_p75_baseline_v1.0.1 [REPORTED]\n\u2192 [SATELLITE] NASA FIRMS detections for facility Aghajari oil field"
+}

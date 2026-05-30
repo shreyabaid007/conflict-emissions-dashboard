@@ -8,16 +8,20 @@ upgrades that event's confidence label from REPORTED → VERIFIED (see
 
 API reference
 -------------
-Endpoint:   https://api.acleddata.com/acled/read
-Docs:       https://apidocs.acleddata.com/
-Version:    ACLED API v2
+Endpoint:   https://acleddata.com/api/acled/read
+OAuth:      https://acleddata.com/oauth/token
+Docs:       https://acleddata.com/api-documentation/getting-started
 
 Authentication
 --------------
-Every request must include ``email`` and ``key`` query parameters.  Obtain
-credentials at https://acleddata.com/register/.  The free academic tier gives
-full historical data with a ~1-week update lag.  Credentials are read from
-environment variables; never hard-code them.
+ACLED uses OAuth 2.0 (Resource Owner Password Credentials grant).  Obtain
+an account at https://acleddata.com/register/, then exchange your account
+e-mail and password at the ``/oauth/token`` endpoint for a Bearer access
+token (24h expiry) and a refresh token.  Every data request must carry
+the access token in an ``Authorization: Bearer <token>`` header.
+
+Credentials are read from environment variables ``ACLED_EMAIL`` and
+``ACLED_PASSWORD``; never hard-code them.
 
 Attribution requirement (mandatory)
 -------------------------------------
@@ -60,7 +64,8 @@ import enum
 import hashlib
 import logging
 from collections.abc import AsyncIterator
-from datetime import UTC, date, datetime
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Final
 
 import httpx
@@ -76,7 +81,18 @@ from wced.models.provenance import Source, SourceType
 
 log = logging.getLogger(__name__)
 
-ACLED_BASE_URL: Final[str] = "https://api.acleddata.com/acled/read"
+ACLED_BASE_URL: Final[str] = "https://acleddata.com/api/acled/read"
+ACLED_OAUTH_URL: Final[str] = "https://acleddata.com/oauth/token"
+
+# Public OAuth client_id documented by ACLED for end-user password grants.
+ACLED_OAUTH_CLIENT_ID: Final[str] = "acled"
+ACLED_OAUTH_SCOPE: Final[str] = "authenticated"
+
+# Default token lifetime when the server omits ``expires_in`` (24h per docs).
+_DEFAULT_TOKEN_LIFETIME_SECONDS: Final[int] = 24 * 60 * 60
+
+# Refresh slightly before actual expiry to avoid edge-of-window 401s.
+_TOKEN_REFRESH_LEEWAY_SECONDS: Final[int] = 60
 
 # ACLED's hard page-size cap. The connector requests this many rows per page
 # and uses a shorter response as the "last page" sentinel.
@@ -131,48 +147,6 @@ class ACLEDEvent(BaseModel):
     a FireEvent is a WCED domain object anchored to a Facility with quantified
     FRP; an ACLEDEvent is a raw upstream record that *may* corroborate a
     FireEvent after spatial/temporal matching.
-
-    Parameters
-    ----------
-    event_id_cnty : str
-        ACLED composite event identifier (numeric ID + ISO-2 country suffix,
-        e.g. ``"IRN5023"``).
-    event_date : date
-        Date the event was reported (UTC date; ACLED does not record sub-day
-        event times).
-    event_type : str
-        Top-level ACLED category (e.g. ``"Explosions/Remote violence"``).
-    sub_event_type : str
-        ACLED sub-event classification (e.g. ``"Air/drone strike"``).
-    actor1 : str
-        Primary actor named in the event record.
-    actor2 : str
-        Secondary actor (empty string when not applicable).
-    country : str
-        Country where the event occurred (ACLED English name).
-    location : str
-        Locality name (city, district, or POI).
-    latitude : float
-        Centroid latitude in WGS84 (EPSG:4326).
-    longitude : float
-        Centroid longitude in WGS84 (EPSG:4326).
-    source : str
-        Primary source cited by ACLED for this record.
-    notes : str
-        Free-text event description.
-    fatalities : int
-        ACLED fatality estimate (0 when unknown or not applicable; WCED does
-        not store or display casualty figures, but preserves the field for
-        completeness).
-    timestamp : int
-        Unix timestamp (seconds UTC) of when ACLED catalogued this event —
-        not the event time itself.
-    iso : int
-        ISO 3166-1 numeric country code.
-    detected_at : AwareDatetime
-        UTC datetime derived from ``event_date`` at midnight UTC; added by
-        the connector so downstream code can treat all ingest records
-        uniformly regardless of source.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -199,6 +173,19 @@ class ACLEDError(RuntimeError):
     """Raised when the ACLED API returns a non-recoverable error response."""
 
 
+@dataclass
+class _OAuthToken:
+    """Cached OAuth bearer credentials for a single account session."""
+
+    access_token: str
+    refresh_token: str
+    expires_at: datetime  # UTC
+
+    def is_expired(self, *, now: datetime | None = None) -> bool:
+        ref = now if now is not None else datetime.now(tz=UTC)
+        return ref >= self.expires_at - timedelta(seconds=_TOKEN_REFRESH_LEEWAY_SECONDS)
+
+
 def _content_hash(body: bytes) -> str:
     """SHA-256 hex digest of a raw response body."""
     return hashlib.sha256(body).hexdigest()
@@ -210,10 +197,6 @@ def _parse_event(raw: dict[str, Any]) -> ACLEDEvent:
     ACLED returns numeric fields (latitude, longitude, fatalities, timestamp,
     iso) as JSON strings, not numbers.  We coerce them here so callers never
     need to handle the ambiguity.
-
-    ``detected_at`` is synthesised as midnight UTC on ``event_date`` because
-    ACLED does not record sub-day event times; the ``timestamp`` field reflects
-    cataloguing time, not event time.
     """
     event_date = date.fromisoformat(str(raw["event_date"]))
     detected_at = datetime(event_date.year, event_date.month, event_date.day, tzinfo=UTC)
@@ -238,19 +221,23 @@ def _parse_event(raw: dict[str, Any]) -> ACLEDEvent:
 
 
 def _redact_credentials(params: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``params`` with ``key`` and ``email`` replaced.
+    """Return a copy of ``params`` with any credential fields masked.
 
-    The sanitised copy is used to build a credential-free Source identifier
-    suitable for storage and display.
+    The new OAuth flow keeps the access token out of query strings entirely,
+    so the only credential that could plausibly appear in a captured params
+    dict is ``password`` (defensively, e.g. from an OAuth payload that was
+    incorrectly passed in).  Mask any legacy ``key``/``email`` fields too so
+    historical params logged before the OAuth migration cannot leak.
     """
     redacted = dict(params)
-    redacted["key"] = "REDACTED"
-    redacted["email"] = "REDACTED"
+    for sensitive in ("password", "key", "email"):
+        if sensitive in redacted:
+            redacted[sensitive] = "REDACTED"
     return redacted
 
 
 class ACLEDConnector:
-    """Async ingest connector for the ACLED API v2.
+    """Async ingest connector for the ACLED OAuth API.
 
     Queries ACLED's armed conflict event database and yields raw
     :class:`ACLEDEvent` records for the specified date window and countries.
@@ -258,27 +245,27 @@ class ACLEDConnector:
     record attached to every event dict under the ``_source`` key — callers
     must persist this to satisfy provenance requirements.
 
-    The ``_source.metadata["attribution"]`` field always contains
-    :data:`ACLED_ATTRIBUTION`; any output surface that presents ACLED data
-    must propagate this string verbatim to comply with CC BY-NC 4.0.
+    The connector exchanges the supplied account e-mail / password for an
+    OAuth bearer token (24h lifetime) the first time a data request is made,
+    caches the token in memory, and refreshes it via the refresh-token grant
+    when it nears expiry.
 
     Parameters
     ----------
     email : str
-        Registered ACLED account e-mail.
-    api_key : str
-        ACLED API key associated with that account.
+        Registered ACLED account e-mail (used as the OAuth ``username``).
+    password : str
+        ACLED account password (used as the OAuth ``password`` grant value).
     countries : sequence of str, optional
         Country names to query (ACLED uses English names, not ISO codes).
-        Defaults to :data:`DEFAULT_COUNTRIES`.
     event_types : sequence of str, optional
-        ACLED event-type strings to include.  Defaults to
-        :data:`RELEVANT_EVENT_TYPES`.
+        ACLED event-type strings to include.
     client : httpx.AsyncClient, optional
-        Inject a pre-configured client (useful in tests).  When omitted the
-        connector creates and owns its own client via the async context manager.
+        Inject a pre-configured client (useful in tests).
     base_url : str, optional
-        Override the API base URL (useful in tests).
+        Override the data API base URL (useful in tests).
+    oauth_url : str, optional
+        Override the OAuth token endpoint (useful in tests).
     request_timeout : float, optional
         Per-request timeout in seconds.
     max_attempts : int, optional
@@ -290,28 +277,31 @@ class ACLEDConnector:
     def __init__(
         self,
         email: str,
-        api_key: str,
+        password: str,
         *,
         countries: tuple[str, ...] | list[str] = DEFAULT_COUNTRIES,
         event_types: tuple[str, ...] | list[str] = RELEVANT_EVENT_TYPES,
         client: httpx.AsyncClient | None = None,
         base_url: str = ACLED_BASE_URL,
+        oauth_url: str = ACLED_OAUTH_URL,
         request_timeout: float = 30.0,
         max_attempts: int = 5,
     ) -> None:
         if not email:
             raise ValueError("ACLED email must be a non-empty string")
-        if not api_key:
-            raise ValueError("ACLED api_key must be a non-empty string")
+        if not password:
+            raise ValueError("ACLED password must be a non-empty string")
         self._email = email
-        self._api_key = api_key
+        self._password = password
         self._countries = list(countries)
         self._event_types = list(event_types)
         self._base_url = base_url.rstrip("/")
+        self._oauth_url = oauth_url
         self._timeout = request_timeout
         self._max_attempts = max_attempts
         self._client = client
         self._owns_client = client is None
+        self._token: _OAuthToken | None = None
 
     async def __aenter__(self) -> ACLEDConnector:
         if self._client is None:
@@ -332,38 +322,7 @@ class ACLEDConnector:
         countries: list[str] | None = None,
         event_types: list[str] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Yield raw ACLED event dicts for the given date window.
-
-        Each yielded dict contains:
-
-        - All raw API fields from the ACLED response (string-typed as returned)
-        - ``event`` (:class:`ACLEDEvent`) — the parsed, type-coerced model
-        - ``_source`` (:class:`~wced.models.provenance.Source`) — provenance
-          record for the API page that produced this event; the same object
-          is shared by all events from a single page fetch
-        - ``detected_at`` (:class:`datetime`) — UTC midnight on
-          ``event_date`` (ACLED does not record sub-day event times)
-
-        The ``_source`` carries ``metadata["attribution"]`` equal to
-        :data:`ACLED_ATTRIBUTION`; any output surface must propagate this.
-
-        Parameters
-        ----------
-        start : date or datetime
-            Inclusive start of the query window.  If a ``datetime`` is
-            passed its date component is used.
-        end : date or datetime
-            Inclusive end of the query window.
-        countries : list of str, optional
-            Override the instance-level country list for this query only.
-        event_types : list of str, optional
-            Override the instance-level event-type list for this query only.
-
-        Yields
-        ------
-        dict[str, Any]
-            One dict per ACLED event; see above for the guaranteed keys.
-        """
+        """Yield raw ACLED event dicts for the given date window."""
         _countries = countries if countries is not None else self._countries
         _event_types = event_types if event_types is not None else self._event_types
         _start = start.date() if isinstance(start, datetime) else start
@@ -401,12 +360,7 @@ class ACLEDConnector:
         end: datetime,
         bbox: tuple[float, float, float, float],
     ) -> AsyncIterator[dict[str, Any]]:
-        """IngestConnector protocol entrypoint; delegates to :meth:`query_events`.
-
-        The ``bbox`` parameter is accepted for protocol compatibility but ACLED
-        filters by country name, not bounding box.  Spatial filtering against
-        the bbox is the caller's responsibility.
-        """
+        """IngestConnector protocol entrypoint; delegates to :meth:`query_events`."""
         async for record in self.query_events(start, end):
             yield record
 
@@ -420,9 +374,10 @@ class ACLEDConnector:
         event_types: list[str],
         page: int,
     ) -> dict[str, Any]:
+        # OAuth credentials travel in the Authorization header, never in the
+        # query string.  ``_format=json`` is mandatory per the current docs.
         return {
-            "key": self._api_key,
-            "email": self._email,
+            "_format": "json",
             "event_date": f"{start.isoformat()}|{end.isoformat()}",
             "event_date_where": "BETWEEN",
             "country": "|".join(countries),
@@ -442,7 +397,9 @@ class ACLEDConnector:
         *,
         total_count: int,
     ) -> Source:
-        # Build a credential-free identifier for storage/display.
+        # Build a credential-free identifier for storage/display.  OAuth keeps
+        # the bearer token out of the URL, but we still pass params through
+        # the redactor so any future credential field is masked defensively.
         safe_params = _redact_credentials(
             self._build_params(start, end, countries, event_types, page)
         )
@@ -477,6 +434,91 @@ class ACLEDConnector:
         raw_body, payload = await self._get_with_retry(params)
         return raw_body, payload
 
+    # ---- OAuth ----------------------------------------------------------
+
+    async def _ensure_token(self) -> str:
+        """Return a valid bearer token, fetching or refreshing as needed."""
+        if self._token is None:
+            await self._fetch_token()
+        elif self._token.is_expired():
+            try:
+                await self._refresh_token()
+            except ACLEDError:
+                # Refresh failed (e.g. refresh token also expired) — fall back
+                # to a fresh password grant.
+                log.warning("acled: refresh token rejected, re-authenticating")
+                await self._fetch_token()
+        assert self._token is not None  # for type checker
+        return self._token.access_token
+
+    async def _fetch_token(self) -> None:
+        """Exchange e-mail/password for a new bearer + refresh token pair."""
+        payload = await self._post_oauth(
+            {
+                "grant_type": "password",
+                "client_id": ACLED_OAUTH_CLIENT_ID,
+                "scope": ACLED_OAUTH_SCOPE,
+                "username": self._email,
+                "password": self._password,
+            }
+        )
+        self._token = self._token_from_payload(payload)
+
+    async def _refresh_token(self) -> None:
+        """Use the cached refresh token to mint a new access token."""
+        assert self._token is not None
+        if not self._token.refresh_token:
+            raise ACLEDError("no refresh token available")
+        payload = await self._post_oauth(
+            {
+                "grant_type": "refresh_token",
+                "client_id": ACLED_OAUTH_CLIENT_ID,
+                "refresh_token": self._token.refresh_token,
+            }
+        )
+        self._token = self._token_from_payload(payload)
+
+    @staticmethod
+    def _token_from_payload(payload: dict[str, Any]) -> _OAuthToken:
+        try:
+            access = str(payload["access_token"])
+        except KeyError as exc:
+            raise ACLEDError(
+                f"ACLED OAuth response missing access_token: {payload}"
+            ) from exc
+        refresh = str(payload.get("refresh_token", ""))
+        try:
+            lifetime = int(payload.get("expires_in", _DEFAULT_TOKEN_LIFETIME_SECONDS))
+        except (TypeError, ValueError):
+            lifetime = _DEFAULT_TOKEN_LIFETIME_SECONDS
+        return _OAuthToken(
+            access_token=access,
+            refresh_token=refresh,
+            expires_at=datetime.now(tz=UTC) + timedelta(seconds=lifetime),
+        )
+
+    async def _post_oauth(self, data: dict[str, str]) -> dict[str, Any]:
+        if self._client is None:
+            raise RuntimeError(
+                "ACLEDConnector must be used as an async context manager "
+                "or initialised with an explicit httpx.AsyncClient"
+            )
+        response = await self._client.post(self._oauth_url, data=data)
+        if response.status_code >= 400:
+            raise ACLEDError(
+                f"ACLED OAuth request failed: {response.status_code}"
+                f" {response.text[:200]}"
+            )
+        try:
+            payload: dict[str, Any] = response.json()
+        except ValueError as exc:
+            raise ACLEDError(
+                f"ACLED OAuth response was not JSON: {response.text[:200]}"
+            ) from exc
+        return payload
+
+    # ---- Data fetch ------------------------------------------------------
+
     async def _get_with_retry(
         self, params: dict[str, Any]
     ) -> tuple[bytes, dict[str, Any]]:
@@ -488,7 +530,8 @@ class ACLEDConnector:
         client = self._client
 
         # Retry on transient transport errors and 5xx.  4xx is fatal (bad
-        # credentials, invalid params) and must not be retried.
+        # credentials, invalid params) and must not be retried — except 401,
+        # which we treat as a token-expiry signal: refresh once and retry.
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(self._max_attempts),
             wait=wait_exponential(multiplier=0.5, min=0.5, max=10.0),
@@ -496,7 +539,17 @@ class ACLEDConnector:
             reraise=True,
         ):
             with attempt:
-                response = await client.get(self._base_url, params=params)
+                token = await self._ensure_token()
+                headers = {"Authorization": f"Bearer {token}"}
+                response = await client.get(
+                    self._base_url, params=params, headers=headers
+                )
+                if response.status_code == 401 and self._token is not None:
+                    # Server rejected the cached token; force a refresh and
+                    # let tenacity retry the request.
+                    log.info("acled: 401 from data endpoint, invalidating token")
+                    self._token = None
+                    raise _RetryableStatus(401)
                 if response.status_code >= 500:
                     log.warning(
                         "acled: %s returned %d, retrying",

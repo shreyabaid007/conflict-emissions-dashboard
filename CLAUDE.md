@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with this repository.
 
 **Name:** War Carbon Emissions Dashboard (WCED)
 **Mission:** A near-real-time, publicly auditable dashboard quantifying CO₂ emissions from oil and fuel infrastructure fires during the 2026 Iran–US–Israel war, using only public satellite data and peer-reviewed emission factors.
-**Stage:** V1 — single category (oil/fuel fire emissions only). Architecture must support future emission-category modules.
+**Stage:** V1 live — oil/fuel fire emissions only, methodology v1.0.5 (baseline subtraction + fraction-destroyed recalibration). Editorial workflow active, 7 facilities tracked, 47 events detected. Architecture supports future emission-category modules.
 
 ## Core Principles (Non-Negotiable)
 
@@ -32,33 +32,35 @@ This file provides guidance to Claude Code when working with this repository.
 - **API framework:** FastAPI
 - **Data validation:** Pydantic v2
 - **Geospatial:** GeoPandas, Shapely, Rasterio
-- **Satellite data:** sentinelsat, pystac-client, planetary-computer (Microsoft Planetary Computer)
-- **Atmospheric modeling:** HARP for TROPOMI, optional HYSPLIT via Docker
-- **AI/LLM:** Anthropic Claude API (claude-opus-4-7 for complex reasoning, claude-haiku-4-5 for high-volume classification); structured outputs via Pydantic models
-- **Vision:** Hugging Face transformers (ViT, CLIP); fine-tuning on xView2-style damage datasets later
-- **Monte Carlo:** NumPy + SciPy; consider PyMC for hierarchical models in V2
-- **Storage:** PostgreSQL + PostGIS (events, facilities, estimates); MinIO/S3 (raster tiles); DuckDB for analytics
-- **Pipeline orchestration:** Prefect (preferred over Airflow for Python-native DX)
-- **Frontend:** Next.js + MapLibre GL (no proprietary mapping); served separately from API
-- **Observability:** OpenTelemetry; Sentry for errors; structured JSON logs
+- **Satellite data:** pystac-client, planetary-computer (Microsoft Planetary Computer)
+- **AI/LLM:** Anthropic Claude API (claude-opus-4-7 for complex reasoning, claude-haiku-4-5 for high-volume classification); OpenRouter as alternative provider; structured outputs via Pydantic models
+- **Monte Carlo:** NumPy + SciPy
+- **Storage:** PostgreSQL + PostGIS via GeoAlchemy2 (events, facilities, estimates)
+- **Frontend:** Next.js + MapLibre GL + Tailwind CSS (no proprietary mapping); served separately from API
+- **Task runner:** Justfile
+- **Observability:** Prometheus + Grafana; OpenTelemetry middleware; structured JSON logs (structlog)
 - **Deployment:** Docker Compose for dev; Kubernetes-ready for prod (Helm charts in `deploy/`)
+- **HTTP clients:** httpx (async) + tenacity (retry)
 
 ## Repository Structure
 
-See `structure.md` for canonical layout. Key directories:
+See `.steering/structure.md` for the full canonical layout. Key directories:
 - `wced/` — main Python package
-- `wced/ingest/` — data source connectors (one module per source)
-- `wced/detect/` — fire detection logic
-- `wced/verify/` — verification pipeline (satellite + ACLED + LLM)
-- `wced/quantify/` — emissions calculations (FRP, inventory, Monte Carlo)
-- `wced/ai/` — Claude/vision model wrappers with provenance tracking
-- `wced/provenance/` — provenance graph data model and storage
-- `wced/api/` — FastAPI app
-- `wced/cli/` — Typer CLI for ops tasks
-- `data/` — git-LFS facility registry; emission factor YAML; NEVER raw satellite data
-- `methodology/` — versioned methodology docs (PDF + LaTeX source)
-- `tests/` — pytest; aim for ≥80% coverage on `quantify/` and `provenance/`
-- `notebooks/` — exploratory only; never in pipeline
+- `wced/ingest/` — data source connectors (firms, acled, gdelt, sentinel2, sentinel5p)
+- `wced/detect/` — fire detection (hotspot, facility_match, baseline, persistence)
+- `wced/verify/` — verification pipeline (sentinel2_check, acled_corroboration, confidence, editorial)
+- `wced/quantify/` — emissions calculations (frp, inventory, factors, aggregate, reconcile, distribution)
+- `wced/ai/` — Claude client wrapper + vision classify
+- `wced/provenance/` — provenance store
+- `wced/pipeline/` — orchestration flows (daily_ingest, quantification, validation_weekly)
+- `wced/api/` — FastAPI app with routes (events, facilities, aggregates, timeseries, meta)
+- `wced/db/` — SQLAlchemy models, Alembic migrations, repositories
+- `wced/cli/` — Typer CLI (`main.py` for pipeline commands, `verify.py` for editorial)
+- `data/` — facility registry GeoJSON, emission_factors.yaml, parameter_distributions.yaml; NEVER raw satellite data
+- `methodology/` — versioned methodology docs (PDF + LaTeX source + CHANGELOG.md)
+- `tests/` — pytest; unit/, integration/, methodology/ suites; aim for ≥80% coverage on `quantify/` and `provenance/`
+- `deploy/` — Docker Compose dev stack, Dockerfiles, Grafana/Prometheus config
+- `scripts/` — one-off operational scripts (bootstrap_facilities, backfill, approve_top_events)
 
 ## Coding Standards
 
@@ -102,26 +104,46 @@ When asked to implement a feature:
 
 ## Methodology Versioning
 
-- Methodology is versioned with semantic versioning (v1.0, v1.1, v2.0)
+- Methodology is versioned with semantic versioning (v1.0, v1.0.1, v1.0.2, v1.1, v2.0)
 - Database stores `methodology_version` on every estimate
-- Recomputing all estimates is a deliberate operation, never automatic
+- Recomputing all estimates is a deliberate operation via `wced recompute --methodology-version <ver>`, never automatic
 - The methodology PDF must be approved by the Scientific Steering Committee before being released as a version
+- Current versions: v1.0 (raw FRP), v1.0.1 (baseline subtraction), v1.0.2 (pre-war baseline data fix), v1.0.5 (fraction-destroyed recalibration for storage-type facilities)
+- **Latest live version: v1.0.5**
+- See `methodology/CHANGELOG.md` for detailed version history
 
 ## Editorial Workflow
 
-- New incidents enter `pending_review` status
-- Editorial board reviewer approves → `published`
-- Reviewer rejects → `rejected` with reason
-- Published incidents that fail later verification → `retracted` with public changelog entry
+- State machine: `PENDING_REVIEW` → `PUBLISHED` (approve) or `REJECTED` (reject)
+- `REJECTED` → `PENDING_REVIEW` (resubmit); `PUBLISHED` → `RETRACTED` (retract)
+- Detection runs with `--no-auto-publish` (enforced in Justfile `detect` recipe)
+- `wced verify approve/reject/resubmit/retract` commands in `cli/verify.py`
+- `wced verify add-assessment` attaches DamageAssessment to already-published events
 - Never silently delete; always changelog
 
 ## Useful Documents
 
-- `docs/V1_PLAN.md` — V1 scope and methodology
+- `HANDOFF.md` — current state snapshot (numbers, what's live, what's pending)
+- `docs/V1_PLAN.md` — V1 scope, methodology, and current status
+- `docs/DEV_SETUP.md` — developer setup guide
+- `docs/RUNBOOK.md` — operational runbook for running the pipeline
+- `docs/INCIDENT_RESPONSE.md` — error handling and retractions
+- `docs/LAUNCH_CHECKLIST.md` — pre-launch verification
 - `.steering/product.md` — product vision and user personas
-- `.steering/structure.md` — repo layout
+- `.steering/structure.md` — repo layout (canonical)
 - `.steering/tech.md` — tech stack rationale
-- `methodology/v1.0.pdf` — the source of truth for all equations
+- `methodology/v1.0.pdf` — source of truth for base equations (frozen)
+- `methodology/v1.0.5.tex` — current methodology (supersedes v1.0)
+- `methodology/CHANGELOG.md` — methodology version history (v1.0 through v1.0.5)
+
+## Operations
+
+- **Dev stack:** `docker compose -f deploy/docker-compose.yml up` (or `just up`)
+- **Task runner:** Justfile wraps common operations (`just detect`, `just quantify`, `just verify`)
+- **CLI entry point:** `wced` (Typer CLI in `wced/cli/main.py`)
+- **Key CLI commands:** `wced detect`, `wced quantify`, `wced recompute`, `wced ingest firms-historical`, `wced verify approve/reject/add-assessment`
+- **DB port:** 5432 by default in dev docker-compose (override with `POSTGRES_PORT` env var)
+- **FIRMS archival ingest:** `wced ingest firms-historical --start YYYY-MM-DD --end YYYY-MM-DD` uses SP sources with 5-day API chunks
 
 ## When Stuck
 
@@ -129,22 +151,3 @@ If methodology is unclear: stop, ask. Don't invent.
 If a source seems unreliable: stop, flag for editorial review.
 If an AI output disagrees with a deterministic calculation: trust the deterministic one.
 If uncertainty bounds seem implausibly narrow: they probably are; revisit the parameter PDFs.
-
-## Deferred Decisions (must resolve before the listed prompt)
-
-- **Emission factor → facility type binding (before Prompt 4.2):**
-  Each entry in `data/emission_factors.yaml` should include an
-  `applicable_facility_types` list (e.g., `[REFINERY, OIL_DEPOT]` for
-  `crude_oil_combustion`; `[GAS_PROCESSING]` for a future natural-gas
-  factor). `quantify/inventory.py` must validate that the selected
-  factor is applicable to the event's facility type and raise if not.
-  Without this guard, applying a crude-oil combustion factor to a
-  gas-processing facility silently produces wrong numbers.
-
-  - **Methodology PDF v1.0 (before Prompt 4.1):** Write
-  `methodology/v1.0.tex` covering Sections 2 (data model), 3 (emission
-  calculations — FRP method §3.3, inventory method §3.4, reconciliation
-  §3.5), and 4 (verification and confidence labels §4.3). Compile to
-  `methodology/v1.0.pdf`. Content source: `docs/V1_PLAN.md` Sections
-  "V1 Methodology Specification" and "What the V1 Dashboard Displays".
-  No quantification code merges without this PDF existing.

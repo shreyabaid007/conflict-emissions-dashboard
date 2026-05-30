@@ -345,6 +345,154 @@
         "osm_id": null,
         "notes": "Aggregated entry for the Ras Laffan LNG / GTL / gas processing complex. Capacity in barrels is not the natural unit for an LNG hub; left null pending the natural-gas emission factor (deferred per CLAUDE.md). Polygon is a coarse bounding rectangle around the industrial city perimeter."
       }
+    },
+    {
+      "type": "Feature",
+      "id": "0d92a236-9ff1-597c-8d56-4d5829784c59",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [48.280, 30.350]
+      },
+      "properties": {
+        "name": "Abadan Refinery",
+        "facility_type": "REFINERY",
+        "country": "IRN",
+        "capacity_barrels": 400000,
+        "capacity_uncertainty_pct": 20.0,
+        "operator": "NIORDC — Abadan Oil Refining Company",
+        "source_url": "https://en.wikipedia.org/wiki/Abadan_Refinery",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Iran's oldest refinery at the head of the Persian Gulf. Centroid only; polygon pending editorial review. High-FRP FIRMS cluster detected here Mar 7-14."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "7eb58c65-bcf9-5d9b-a18f-1434390ce1ea",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [51.430, 35.542]
+      },
+      "properties": {
+        "name": "Tehran Refinery (south tank farm)",
+        "facility_type": "STORAGE_TANK_FARM",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NIORDC — Tehran Oil Refining Company",
+        "source_url": "https://en.wikipedia.org/wiki/Tehran_Oil_Refining_Company",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Tank farm ~4.7 km south of the main Tehran Refinery polygon. FIRMS detected 181 MW peak FRP here on Mar 9; the main refinery polygon does not cover this area."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "e32ce42e-954a-5aa7-91eb-f6fda11818c5",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [49.114, 30.437]
+      },
+      "properties": {
+        "name": "Bandar Imam Khomeini Petrochemical",
+        "facility_type": "PETROCHEMICAL",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "National Petrochemical Company (NPC)",
+        "source_url": "https://en.wikipedia.org/wiki/Bandar_Imam_Khomeini",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Major petrochemical hub at Mahshahr on the Persian Gulf coast. Centroid only."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "904d7243-b2e8-5933-b1c7-a69fa5ecd517",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [52.634, 27.506]
+      },
+      "properties": {
+        "name": "South Pars / Asaluyeh gas complex",
+        "facility_type": "GAS_PROCESSING",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "Multiple — Pars Oil and Gas Company (POGC)",
+        "source_url": "https://en.wikipedia.org/wiki/South_Pars/North_Dome_Gas-Condensate_field",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Iran's largest gas processing complex. Onshore processing for the South Pars field. Centroid only; actual complex spans several km of coastline."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "7f5f0cc0-8914-53f1-99e2-71b6c9a27e79",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [49.280, 31.940]
+      },
+      "properties": {
+        "name": "Masjed Soleyman oil field",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NISOC — National Iranian South Oil Company",
+        "source_url": "https://en.wikipedia.org/wiki/Masjed_Soleyman",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Oldest oil field in the Middle East (discovered 1908). Centroid of surface processing facilities."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dd0445ec-fa7b-5325-b55f-1d8535f054ad",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [49.820, 30.721]
+      },
+      "properties": {
+        "name": "Aghajari oil field",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NISOC — National Iranian South Oil Company",
+        "source_url": "https://en.wikipedia.org/wiki/Aghajari_oil_field",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Major producing oil field in Khuzestan. Centroid of surface infrastructure."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ef373c6a-73ce-5b11-83c8-7302de6a6502",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [48.143, 31.005]
+      },
+      "properties": {
+        "name": "Ahvaz / Karoon production area",
+        "facility_type": "OIL_DEPOT",
+        "country": "IRN",
+        "capacity_barrels": null,
+        "operator": "NISOC — National Iranian South Oil Company",
+        "source_url": "https://en.wikipedia.org/wiki/Ahvaz",
+        "added_at": "2026-05-24T00:00:00Z",
+        "added_by": "claude-code/facility-gap-analysis",
+        "gem_id": null,
+        "osm_id": null,
+        "notes": "Aggregate entry for oil production and processing infrastructure around Ahvaz / Karoon field complex. Centroid only; actual infrastructure is dispersed across the region."
+      }
     }
   ]
 }

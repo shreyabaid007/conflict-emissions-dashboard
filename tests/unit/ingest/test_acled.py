@@ -1,15 +1,14 @@
 """Tests for wced.ingest.acled.
 
-VCR cassettes under tests/fixtures/cassettes/ record ACLED JSON responses
-against a fake key ("TESTKEY") and email ("test@example.com").  Cassettes
-match on method + scheme + host + path only (no query) because ACLED embeds
-all parameters in the query string, and encoding varies by httpx version.
-The connector's parameter construction is tested separately via MockTransport
-so correctness is not lost.
+VCR cassettes under tests/fixtures/cassettes/ record the ACLED OAuth token
+exchange followed by the JSON data response.  Cassettes match on
+method + scheme + host + path only (no query) because ACLED embeds all
+parameters in the query string, and encoding varies by httpx version.
+The connector's parameter construction is tested separately via
+MockTransport so correctness is not lost.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 from datetime import UTC, date, datetime
 
@@ -40,7 +39,37 @@ _vcr = vcr.VCR(
 
 QUERY_DATE = datetime(2026, 3, 15, tzinfo=UTC)
 TEST_EMAIL = "test@example.com"
-TEST_KEY = "TESTKEY"
+TEST_PASSWORD = "TESTPASSWORD"
+
+
+# ---------------------------------------------------------------------------
+# helpers — MockTransport handlers that fulfil both the OAuth and data call
+# ---------------------------------------------------------------------------
+
+
+def _oauth_response() -> httpx.Response:
+    body = json.dumps(
+        {
+            "access_token": "test-access-token",
+            "refresh_token": "test-refresh-token",
+            "expires_in": 86400,
+            "token_type": "Bearer",
+        }
+    )
+    return httpx.Response(
+        200, text=body, headers={"content-type": "application/json"}
+    )
+
+
+def _make_oauth_aware_handler(data_handler):
+    """Wrap a data handler so it transparently serves OAuth token requests."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth/token":
+            return _oauth_response()
+        return data_handler(request)
+
+    return handler
 
 
 # ---------------------------------------------------------------------------
@@ -150,22 +179,34 @@ class TestParseEvent:
 class TestConnectorBasics:
     def test_rejects_empty_email(self) -> None:
         with pytest.raises(ValueError, match="email"):
-            ACLEDConnector(email="", api_key="key")
+            ACLEDConnector(email="", password="pw")
 
-    def test_rejects_empty_api_key(self) -> None:
-        with pytest.raises(ValueError, match="api_key"):
-            ACLEDConnector(email="test@example.com", api_key="")
+    def test_rejects_empty_password(self) -> None:
+        with pytest.raises(ValueError, match="password"):
+            ACLEDConnector(email="test@example.com", password="")
 
-    def test_params_contain_credentials(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+    def test_params_omit_credentials(self) -> None:
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         params = c._build_params(
             date(2026, 3, 15), date(2026, 3, 15), ["Iran"], ["Battles"], 1
         )
-        assert params["key"] == TEST_KEY
-        assert params["email"] == TEST_EMAIL
+        # OAuth keeps the bearer token in the Authorization header, never
+        # in the query string.
+        assert "key" not in params
+        assert "email" not in params
+        assert "password" not in params
+        assert "Bearer" not in str(params)
+        assert TEST_PASSWORD not in str(params)
+
+    def test_params_require_json_format(self) -> None:
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
+        params = c._build_params(
+            date(2026, 3, 15), date(2026, 3, 15), ["Iran"], ["Battles"], 1
+        )
+        assert params["_format"] == "json"
 
     def test_params_event_date_format(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         params = c._build_params(
             date(2026, 3, 1), date(2026, 3, 31), ["Iran"], ["Battles"], 1
         )
@@ -173,14 +214,14 @@ class TestConnectorBasics:
         assert params["event_date_where"] == "BETWEEN"
 
     def test_params_multi_country_pipe_separated(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         params = c._build_params(
             date(2026, 3, 15), date(2026, 3, 15), ["Iran", "Iraq"], ["Battles"], 1
         )
         assert params["country"] == "Iran|Iraq"
 
     def test_params_multi_event_type_pipe_separated(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         params = c._build_params(
             date(2026, 3, 15), date(2026, 3, 15), ["Iran"],
             ["Battles", "Explosions/Remote violence"], 1,
@@ -188,7 +229,7 @@ class TestConnectorBasics:
         assert params["event_type"] == "Battles|Explosions/Remote violence"
 
     def test_params_page_and_limit(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         params = c._build_params(
             date(2026, 3, 15), date(2026, 3, 15), ["Iran"], ["Battles"], 3
         )
@@ -204,7 +245,7 @@ class TestConnectorBasics:
 async def _collect(start: datetime, end: datetime) -> list[dict]:
     async with ACLEDConnector(
         email=TEST_EMAIL,
-        api_key=TEST_KEY,
+        password=TEST_PASSWORD,
         countries=["Iran"],
         event_types=["Explosions/Remote violence", "Battles"],
     ) as c:
@@ -251,6 +292,178 @@ class TestQueryEventsHappyPath:
 
 
 # ---------------------------------------------------------------------------
+# OAuth authentication behaviour
+# ---------------------------------------------------------------------------
+
+
+class TestOAuth:
+    async def test_token_request_sends_password_grant(self) -> None:
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            if request.url.path == "/oauth/token":
+                return _oauth_response()
+            body = json.dumps({"status": 200, "success": True, "count": 0, "data": []})
+            return httpx.Response(
+                200, text=body, headers={"content-type": "application/json"}
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            c = ACLEDConnector(
+                email=TEST_EMAIL, password=TEST_PASSWORD,
+                countries=["Iran"], event_types=["Battles"],
+                client=client,
+            )
+            async with c:
+                _ = [r async for r in c.query_events(QUERY_DATE, QUERY_DATE)]
+        finally:
+            await client.aclose()
+
+        oauth_reqs = [r for r in captured if r.url.path == "/oauth/token"]
+        assert len(oauth_reqs) == 1
+        form = dict(
+            kv.split("=", 1) for kv in oauth_reqs[0].content.decode().split("&")
+        )
+        assert form["grant_type"] == "password"
+        assert form["client_id"] == "acled"
+        assert form["scope"] == "authenticated"
+        # httpx form-encodes the values
+        from urllib.parse import unquote_plus
+        assert unquote_plus(form["username"]) == TEST_EMAIL
+        assert unquote_plus(form["password"]) == TEST_PASSWORD
+
+    async def test_data_request_carries_bearer_header(self) -> None:
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            if request.url.path == "/oauth/token":
+                return _oauth_response()
+            body = json.dumps({"status": 200, "success": True, "count": 0, "data": []})
+            return httpx.Response(
+                200, text=body, headers={"content-type": "application/json"}
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            c = ACLEDConnector(
+                email=TEST_EMAIL, password=TEST_PASSWORD,
+                countries=["Iran"], event_types=["Battles"],
+                client=client,
+            )
+            async with c:
+                _ = [r async for r in c.query_events(QUERY_DATE, QUERY_DATE)]
+        finally:
+            await client.aclose()
+
+        data_reqs = [r for r in captured if r.url.path != "/oauth/token"]
+        assert data_reqs
+        assert data_reqs[0].headers["authorization"] == "Bearer test-access-token"
+
+    async def test_token_cached_across_pages(self) -> None:
+        # Two full pages of data — connector should fetch the token once
+        # and reuse it for both data requests.
+        page_sizes = [ACLED_PAGE_LIMIT, 1]
+        data_call_count = 0
+        oauth_call_count = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal data_call_count, oauth_call_count
+            if request.url.path == "/oauth/token":
+                oauth_call_count += 1
+                return _oauth_response()
+            n = page_sizes[data_call_count]
+            data_call_count += 1
+            data = [
+                {
+                    "event_id_cnty": f"IRN{i}",
+                    "event_date": "2026-03-15",
+                    "event_type": "Battles",
+                    "sub_event_type": "Armed clash",
+                    "actor1": "A", "actor2": "",
+                    "country": "Iran", "location": "Tehran",
+                    "latitude": "35.7", "longitude": "51.4",
+                    "source": "AP", "notes": "",
+                    "fatalities": "0", "timestamp": "1742090880", "iso": "364",
+                }
+                for i in range(n)
+            ]
+            body = json.dumps({"status": 200, "success": True, "count": n, "data": data})
+            return httpx.Response(
+                200, text=body, headers={"content-type": "application/json"}
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            c = ACLEDConnector(
+                email=TEST_EMAIL, password=TEST_PASSWORD,
+                countries=["Iran"], event_types=["Battles"],
+                client=client,
+            )
+            async with c:
+                _ = [r async for r in c.query_events(QUERY_DATE, QUERY_DATE)]
+        finally:
+            await client.aclose()
+
+        assert oauth_call_count == 1
+        assert data_call_count == 2
+
+    async def test_401_invalidates_token_and_retries(self) -> None:
+        oauth_calls = 0
+        data_calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal oauth_calls, data_calls
+            if request.url.path == "/oauth/token":
+                oauth_calls += 1
+                return _oauth_response()
+            data_calls += 1
+            if data_calls == 1:
+                return httpx.Response(401, text='{"error":"token expired"}')
+            body = json.dumps({"status": 200, "success": True, "count": 0, "data": []})
+            return httpx.Response(
+                200, text=body, headers={"content-type": "application/json"}
+            )
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            c = ACLEDConnector(
+                email=TEST_EMAIL, password=TEST_PASSWORD,
+                countries=["Iran"], event_types=["Battles"],
+                client=client, max_attempts=3,
+            )
+            async with c:
+                _ = [r async for r in c.query_events(QUERY_DATE, QUERY_DATE)]
+        finally:
+            await client.aclose()
+
+        # Token was re-fetched after 401, and the second data attempt
+        # succeeded.
+        assert oauth_calls == 2
+        assert data_calls == 2
+
+    async def test_oauth_failure_raises(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/oauth/token":
+                return httpx.Response(401, text='{"error":"invalid_grant"}')
+            return httpx.Response(500)  # should never be reached
+
+        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            c = ACLEDConnector(
+                email=TEST_EMAIL, password="wrong", client=client
+            )
+            async with c:
+                with pytest.raises(ACLEDError, match="OAuth"):
+                    async for _ in c.query_events(QUERY_DATE, QUERY_DATE):
+                        pass
+        finally:
+            await client.aclose()
+
+
+# ---------------------------------------------------------------------------
 # Source record verification
 # ---------------------------------------------------------------------------
 
@@ -265,7 +478,6 @@ class TestSourceRecord:
     async def test_same_source_shared_within_page(self) -> None:
         with _vcr.use_cassette("acled_events.yaml"):
             records = await _collect(QUERY_DATE, QUERY_DATE)
-        # All three events come from one page → same Source object.
         source_ids = {id(r["_source"]) for r in records}
         assert len(source_ids) == 1
 
@@ -279,23 +491,13 @@ class TestSourceRecord:
         with _vcr.use_cassette("acled_events.yaml"):
             records = await _collect(QUERY_DATE, QUERY_DATE)
         src: Source = records[0]["_source"]
-        assert TEST_KEY not in src.identifier
+        assert TEST_PASSWORD not in src.identifier
         assert TEST_EMAIL not in src.identifier
-        assert "REDACTED" in src.identifier
+        # And no bearer token either.
+        assert "Bearer" not in src.identifier
+        assert "test-access-token" not in src.identifier
 
     async def test_source_content_hash_matches_body(self) -> None:
-        # Reproduce the exact JSON body the cassette returns and check the hash.
-        cassette_body = (
-            '{"status":200,"success":true,"count":3,"data":[\n'
-            '  {"event_id_cnty":"IRN5023","event_date":"2026-03-15",'
-            '"event_type":"Explosions/Remote violence","sub_event_type":"Air/drone strike",'
-            '"actor1":"Military Forces of Israel (2024-)","actor2":"Government of Iran",'
-            '"country":"Iran","location":"Isfahan","latitude":"32.6601","longitude":"51.6860",'
-            '"source":"Tehran Times","notes":"Air strikes targeted oil refinery northeast of Isfahan. Multiple explosions reported.",'
-            '"fatalities":"0","timestamp":"1742090880","iso":"364"},\n'
-        )
-        # We don't recompute the full hash here since cassette body formatting
-        # may differ; instead just confirm the hash is a non-empty hex string.
         with _vcr.use_cassette("acled_events.yaml"):
             records = await _collect(QUERY_DATE, QUERY_DATE)
         src: Source = records[0]["_source"]
@@ -319,65 +521,80 @@ class TestSourceRecord:
 
 
 # ---------------------------------------------------------------------------
+# Credential redaction helper
+# ---------------------------------------------------------------------------
+
+
+class TestRedaction:
+    def test_strips_password(self) -> None:
+        from wced.ingest.acled import _redact_credentials
+        out = _redact_credentials(
+            {"password": "secret", "country": "Iran"}
+        )
+        assert out["password"] == "REDACTED"
+        assert out["country"] == "Iran"
+
+    def test_strips_legacy_key_and_email(self) -> None:
+        from wced.ingest.acled import _redact_credentials
+        out = _redact_credentials(
+            {"key": "k", "email": "e@example.com", "country": "Iran"}
+        )
+        assert out["key"] == "REDACTED"
+        assert out["email"] == "REDACTED"
+        assert out["country"] == "Iran"
+
+
+# ---------------------------------------------------------------------------
 # Pagination
 # ---------------------------------------------------------------------------
 
 
 class TestPagination:
     async def test_stops_after_partial_page(self) -> None:
-        # First page returns 2 events (< ACLED_PAGE_LIMIT) — no second request.
-        call_count = 0
+        # First page returns 2 events (< ACLED_PAGE_LIMIT) — no second
+        # data request.
+        data_call_count = 0
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            nonlocal call_count
-            call_count += 1
+        def data_handler(request: httpx.Request) -> httpx.Response:
+            nonlocal data_call_count
+            data_call_count += 1
             body = json.dumps({
                 "status": 200,
                 "success": True,
                 "count": 2,
                 "data": [
                     {
-                        "event_id_cnty": f"IRN{call_count}00",
+                        "event_id_cnty": f"IRN{data_call_count}00",
                         "event_date": "2026-03-15",
                         "event_type": "Battles",
                         "sub_event_type": "Armed clash",
-                        "actor1": "A",
-                        "actor2": "B",
-                        "country": "Iran",
-                        "location": "Tehran",
-                        "latitude": "35.7",
-                        "longitude": "51.4",
-                        "source": "Reuters",
-                        "notes": "Clash.",
-                        "fatalities": "0",
-                        "timestamp": "1742090880",
-                        "iso": "364",
+                        "actor1": "A", "actor2": "B",
+                        "country": "Iran", "location": "Tehran",
+                        "latitude": "35.7", "longitude": "51.4",
+                        "source": "Reuters", "notes": "Clash.",
+                        "fatalities": "0", "timestamp": "1742090880", "iso": "364",
                     },
                     {
-                        "event_id_cnty": f"IRN{call_count}01",
+                        "event_id_cnty": f"IRN{data_call_count}01",
                         "event_date": "2026-03-15",
                         "event_type": "Battles",
                         "sub_event_type": "Armed clash",
-                        "actor1": "A",
-                        "actor2": "B",
-                        "country": "Iran",
-                        "location": "Isfahan",
-                        "latitude": "32.66",
-                        "longitude": "51.68",
-                        "source": "AP",
-                        "notes": "Clash near refinery.",
-                        "fatalities": "1",
-                        "timestamp": "1742090880",
-                        "iso": "364",
+                        "actor1": "A", "actor2": "B",
+                        "country": "Iran", "location": "Isfahan",
+                        "latitude": "32.66", "longitude": "51.68",
+                        "source": "AP", "notes": "Clash near refinery.",
+                        "fatalities": "1", "timestamp": "1742090880", "iso": "364",
                     },
                 ],
             })
             return httpx.Response(200, text=body, headers={"content-type": "application/json"})
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(_make_oauth_aware_handler(data_handler))
+        )
         try:
             c = ACLEDConnector(
-                email=TEST_EMAIL, api_key=TEST_KEY,
+                email=TEST_EMAIL, password=TEST_PASSWORD,
                 countries=["Iran"], event_types=["Battles"],
                 client=client,
             )
@@ -387,43 +604,39 @@ class TestPagination:
             await client.aclose()
 
         assert len(records) == 2
-        assert call_count == 1  # pagination stopped after first partial page
+        assert data_call_count == 1
 
     async def test_fetches_second_page_when_first_is_full(self) -> None:
         page_sizes = [ACLED_PAGE_LIMIT, 1]
-        call_count = 0
+        data_call_count = 0
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            nonlocal call_count
-            n = page_sizes[call_count]
-            call_count += 1
+        def data_handler(request: httpx.Request) -> httpx.Response:
+            nonlocal data_call_count
+            n = page_sizes[data_call_count]
+            data_call_count += 1
             data = [
                 {
                     "event_id_cnty": f"IRN{i}",
                     "event_date": "2026-03-15",
                     "event_type": "Battles",
                     "sub_event_type": "Armed clash",
-                    "actor1": "A",
-                    "actor2": "",
-                    "country": "Iran",
-                    "location": "Tehran",
-                    "latitude": "35.7",
-                    "longitude": "51.4",
-                    "source": "AP",
-                    "notes": "",
-                    "fatalities": "0",
-                    "timestamp": "1742090880",
-                    "iso": "364",
+                    "actor1": "A", "actor2": "",
+                    "country": "Iran", "location": "Tehran",
+                    "latitude": "35.7", "longitude": "51.4",
+                    "source": "AP", "notes": "",
+                    "fatalities": "0", "timestamp": "1742090880", "iso": "364",
                 }
                 for i in range(n)
             ]
             body = json.dumps({"status": 200, "success": True, "count": n, "data": data})
             return httpx.Response(200, text=body, headers={"content-type": "application/json"})
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(_make_oauth_aware_handler(data_handler))
+        )
         try:
             c = ACLEDConnector(
-                email=TEST_EMAIL, api_key=TEST_KEY,
+                email=TEST_EMAIL, password=TEST_PASSWORD,
                 countries=["Iran"], event_types=["Battles"],
                 client=client,
             )
@@ -433,43 +646,39 @@ class TestPagination:
             await client.aclose()
 
         assert len(records) == ACLED_PAGE_LIMIT + 1
-        assert call_count == 2
+        assert data_call_count == 2
 
     async def test_pages_have_distinct_sources(self) -> None:
         page_sizes = [ACLED_PAGE_LIMIT, 1]
-        call_count = 0
+        data_call_count = 0
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            nonlocal call_count
-            n = page_sizes[call_count]
-            call_count += 1
+        def data_handler(request: httpx.Request) -> httpx.Response:
+            nonlocal data_call_count
+            n = page_sizes[data_call_count]
+            data_call_count += 1
             data = [
                 {
-                    "event_id_cnty": f"IRN{call_count * 1000 + i}",
+                    "event_id_cnty": f"IRN{data_call_count * 1000 + i}",
                     "event_date": "2026-03-15",
                     "event_type": "Battles",
                     "sub_event_type": "Armed clash",
-                    "actor1": "A",
-                    "actor2": "",
-                    "country": "Iran",
-                    "location": "Tehran",
-                    "latitude": "35.7",
-                    "longitude": "51.4",
-                    "source": "AP",
-                    "notes": "",
-                    "fatalities": "0",
-                    "timestamp": "1742090880",
-                    "iso": "364",
+                    "actor1": "A", "actor2": "",
+                    "country": "Iran", "location": "Tehran",
+                    "latitude": "35.7", "longitude": "51.4",
+                    "source": "AP", "notes": "",
+                    "fatalities": "0", "timestamp": "1742090880", "iso": "364",
                 }
                 for i in range(n)
             ]
             body = json.dumps({"status": 200, "success": True, "count": n, "data": data})
             return httpx.Response(200, text=body, headers={"content-type": "application/json"})
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(_make_oauth_aware_handler(data_handler))
+        )
         try:
             c = ACLEDConnector(
-                email=TEST_EMAIL, api_key=TEST_KEY,
+                email=TEST_EMAIL, password=TEST_PASSWORD,
                 countries=["Iran"], event_types=["Battles"],
                 client=client,
             )
@@ -478,7 +687,6 @@ class TestPagination:
         finally:
             await client.aclose()
 
-        # Page 1 and page 2 sources must be different objects (different bodies).
         page1_src = records[0]["_source"]
         page2_src = records[-1]["_source"]
         assert page1_src is not page2_src
@@ -492,54 +700,59 @@ class TestPagination:
 
 
 class TestErrors:
-    async def test_4xx_raises_immediately(self) -> None:
-        attempt_count = 0
+    async def test_non_auth_4xx_raises_immediately(self) -> None:
+        # 403 is not the auth-refresh signal; must surface immediately
+        # with no retries.
+        data_attempts = 0
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            nonlocal attempt_count
-            attempt_count += 1
-            return httpx.Response(401, text='{"error":"Unauthorized"}')
+        def data_handler(request: httpx.Request) -> httpx.Response:
+            nonlocal data_attempts
+            data_attempts += 1
+            return httpx.Response(403, text='{"error":"Forbidden"}')
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(_make_oauth_aware_handler(data_handler))
+        )
         try:
             c = ACLEDConnector(
-                email=TEST_EMAIL, api_key="BADKEY",
+                email=TEST_EMAIL, password=TEST_PASSWORD,
                 client=client, max_attempts=3,
             )
             async with c:
-                with pytest.raises(ACLEDError, match="401"):
+                with pytest.raises(ACLEDError, match="403"):
                     async for _ in c.query_events(QUERY_DATE, QUERY_DATE):
                         pass
         finally:
             await client.aclose()
 
-        # Must not retry 4xx.
-        assert attempt_count == 1
+        assert data_attempts == 1
 
     async def test_api_level_error_raises(self) -> None:
-        def handler(request: httpx.Request) -> httpx.Response:
+        def data_handler(request: httpx.Request) -> httpx.Response:
             body = json.dumps({
                 "status": 400,
                 "success": False,
-                "message": "Invalid API key",
+                "message": "Invalid query",
                 "data": [],
             })
             return httpx.Response(200, text=body, headers={"content-type": "application/json"})
 
-        client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(_make_oauth_aware_handler(data_handler))
+        )
         try:
             c = ACLEDConnector(
-                email=TEST_EMAIL, api_key="BADKEY", client=client
+                email=TEST_EMAIL, password=TEST_PASSWORD, client=client
             )
             async with c:
-                with pytest.raises(ACLEDError, match="Invalid API key"):
+                with pytest.raises(ACLEDError, match="Invalid query"):
                     async for _ in c.query_events(QUERY_DATE, QUERY_DATE):
                         pass
         finally:
             await client.aclose()
 
     async def test_no_client_raises_runtime_error(self) -> None:
-        c = ACLEDConnector(email=TEST_EMAIL, api_key=TEST_KEY)
+        c = ACLEDConnector(email=TEST_EMAIL, password=TEST_PASSWORD)
         with pytest.raises(RuntimeError, match="context manager"):
             async for _ in c.query_events(QUERY_DATE, QUERY_DATE):
                 pass
@@ -555,7 +768,7 @@ class TestDateHandling:
         with _vcr.use_cassette("acled_events.yaml"):
             async with ACLEDConnector(
                 email=TEST_EMAIL,
-                api_key=TEST_KEY,
+                password=TEST_PASSWORD,
                 countries=["Iran"],
                 event_types=["Explosions/Remote violence", "Battles"],
             ) as c:
@@ -570,7 +783,7 @@ class TestDateHandling:
         with _vcr.use_cassette("acled_events.yaml"):
             async with ACLEDConnector(
                 email=TEST_EMAIL,
-                api_key=TEST_KEY,
+                password=TEST_PASSWORD,
                 countries=["Iran"],
                 event_types=["Explosions/Remote violence", "Battles"],
             ) as c:

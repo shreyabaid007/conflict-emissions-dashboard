@@ -44,6 +44,12 @@ factors:
     units: tCO2_per_barrel
     source: "EPA AP-42 Section 1.3; consistent with CCI Iran brief 2026"
     methodology_section: "3.2.1"
+    applicable_facility_types:
+      - REFINERY
+      - OIL_DEPOT
+      - STORAGE_TANK_FARM
+      - TANKER_TERMINAL
+      - OFFSHORE_PLATFORM
     # No explicit distribution → defaults to triangular with
     # (low, mode, high) = (uncertainty_low, value, uncertainty_high).
 
@@ -78,3 +84,19 @@ factors:
     units: tCO2_per_barrel
     source: "IPCC 2006 GL Vol 2 Ch 1 Table 1.3 (gasoline/diesel weighted average)"
     methodology_section: "3.2.2"
+    applicable_facility_types:
+      - REFINERY
+      - OIL_DEPOT
+      - STORAGE_TANK_FARM
+      - TANKER_TERMINAL
+      - PETROCHEMICAL
+
+  natural_gas_combustion:
+    value: 0.234
+    uncertainty_low: 0.222
+    uncertainty_high: 0.246
+    units: tCO2_per_boe
+    source: "IPCC 2006 GL Vol 2 Ch 2 Table 2.2 (natural gas default); 56.1 tCO2/TJ × 6.12 GJ/boe × 1e-3"
+    methodology_section: "3.2.3"
+    applicable_facility_types:
+      - GAS_PROCESSING

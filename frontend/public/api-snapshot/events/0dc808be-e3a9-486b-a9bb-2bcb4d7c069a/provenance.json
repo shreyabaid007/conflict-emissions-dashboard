@@ -1,0 +1,52 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:34:32.072524Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "event_id": "0dc808be-e3a9-486b-a9bb-2bcb4d7c069a",
+  "chain": [
+    {
+      "node_type": "computation",
+      "id": "4c49e109-cac4-5ffe-bc68-f103792b6532",
+      "detail": {
+        "produced_by": "wced.quantify.frp",
+        "method": "frp_to_co2_v1.0.5",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-24T09:14:35.585388+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "c07fe1fe-068c-4d7b-a545-187455717a20",
+      "detail": {
+        "produced_by": "wced.detect.hotspot",
+        "method": "firms_clustering_v1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-03-20T10:36:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "2fcfba66-d17a-587d-9cc4-d23822eeb4ce",
+      "detail": {
+        "produced_by": "wced.detect.baseline",
+        "method": "rolling_p75_baseline_v1.0.1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-23T08:54:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "source",
+      "id": "9d6b8adb-6606-4316-a8d8-b142dc512010",
+      "detail": {
+        "source_type": "SATELLITE",
+        "identifier": "NASA FIRMS detections for facility Bandar Imam Khomeini Petrochemical",
+        "retrieved_at": "2026-05-24T11:45:42.973020+00:00"
+      }
+    }
+  ],
+  "rendered": "[COMPUTATION] wced.quantify.frp / frp_to_co2_v1.0.5 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.hotspot / firms_clustering_v1 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.baseline / rolling_p75_baseline_v1.0.1 [REPORTED]\n\u2192 [SATELLITE] NASA FIRMS detections for facility Bandar Imam Khomeini Petrochemical"
+}

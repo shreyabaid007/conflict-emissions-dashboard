@@ -1,0 +1,52 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:33:38.900210Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "event_id": "ce20c356-b873-4b08-a982-2332a69789a5",
+  "chain": [
+    {
+      "node_type": "computation",
+      "id": "5543baa8-134d-5c5d-b5e7-2daeb8d2872b",
+      "detail": {
+        "produced_by": "wced.quantify.frp",
+        "method": "frp_to_co2_v1.0.5",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-24T09:14:35.625607+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "5bf4de82-f981-40e9-8189-e19808cd9502",
+      "detail": {
+        "produced_by": "wced.detect.hotspot",
+        "method": "firms_clustering_v1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-03-26T22:46:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "computation",
+      "id": "75d9c2c7-404c-510b-8b19-c034c3c27b60",
+      "detail": {
+        "produced_by": "wced.detect.baseline",
+        "method": "rolling_p75_baseline_v1.0.1",
+        "confidence_label": "REPORTED",
+        "produced_at": "2026-05-23T00:35:00+00:00",
+        "notes": null
+      }
+    },
+    {
+      "node_type": "source",
+      "id": "6029b829-36fc-4330-bbce-0090cab6ca49",
+      "detail": {
+        "source_type": "SATELLITE",
+        "identifier": "NASA FIRMS detections for facility Ahvaz / Karoon production area",
+        "retrieved_at": "2026-05-24T11:45:42.973020+00:00"
+      }
+    }
+  ],
+  "rendered": "[COMPUTATION] wced.quantify.frp / frp_to_co2_v1.0.5 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.hotspot / firms_clustering_v1 [REPORTED]\n\u2192 [COMPUTATION] wced.detect.baseline / rolling_p75_baseline_v1.0.1 [REPORTED]\n\u2192 [SATELLITE] NASA FIRMS detections for facility Ahvaz / Karoon production area"
+}

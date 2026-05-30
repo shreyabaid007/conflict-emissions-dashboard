@@ -24,12 +24,15 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.13",
     "sqlalchemy>=2.0",
+    "geoalchemy2>=0.15",
+    "psycopg2-binary>=2.9",
     "alembic>=1.13",
     "prefect>=3.0",
     "xarray>=2024.1",
     "rioxarray>=0.15",
     "pyyaml>=6.0",
     "typer>=0.12",
+    "tenacity>=8.0",
 ]
 
 [project.optional-dependencies]
@@ -42,9 +45,19 @@ dev = [
     "hypothesis>=6.100",
     "vcrpy>=6.0",
     "types-requests>=2.31",
+    "schemathesis>=3.0",
 ]
 api = [
     "uvicorn[standard]>=0.29",
+    "prometheus-client>=0.20",
+]
+telemetry = [
+    "opentelemetry-api>=1.24",
+    "opentelemetry-sdk>=1.24",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.24",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "prometheus-client>=0.20",
+    "sentry-sdk[fastapi]>=2.0",
 ]
 ai = [
     "transformers>=4.41",
@@ -84,6 +97,9 @@ warn_unreachable = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--cov=wced --cov-report=term-missing"
+markers = [
+    "integration: tests requiring a live PostgreSQL+PostGIS container",
+]
 
 [tool.coverage.report]
 exclude_lines = ["if TYPE_CHECKING:", "raise NotImplementedError"]

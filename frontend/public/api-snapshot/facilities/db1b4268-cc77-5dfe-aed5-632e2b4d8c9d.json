@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:06.229354Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "db1b4268-cc77-5dfe-aed5-632e2b4d8c9d",
+    "name": "Bandar Abbas naval base",
+    "facility_type": "STORAGE_TANK_FARM",
+    "country": "IRN",
+    "capacity_barrels": null,
+    "operator": "IRGN \u2014 Islamic Republic of Iran Navy",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(56.215 27.13)",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

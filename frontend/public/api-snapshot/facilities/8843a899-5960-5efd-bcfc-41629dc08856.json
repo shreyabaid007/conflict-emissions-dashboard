@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:11.972452Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "8843a899-5960-5efd-bcfc-41629dc08856",
+    "name": "Haifa Refineries (Bazan)",
+    "facility_type": "REFINERY",
+    "country": "ISR",
+    "capacity_barrels": 197000.0,
+    "operator": "Bazan Group",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((35.034 32.783,35.047 32.783,35.047 32.794,35.034 32.794,35.034 32.783))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

@@ -1,0 +1,20 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:36:16.874553Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "e4728c41-e40a-4f60-aaa7-98c2d25fcca2",
+    "facility_id": "7eb58c65-bcf9-5d9b-a18f-1434390ce1ea",
+    "detected_at": "2026-03-07T22:01:00Z",
+    "last_seen_at": "2026-03-07T22:01:00Z",
+    "peak_frp_mw": 89.81,
+    "total_frp_integral_mj": null,
+    "detection_source": "FIRMS_VIIRS",
+    "confidence_label": "REPORTED",
+    "status": "PUBLISHED",
+    "notes": "dist_to_facility_m=224",
+    "estimate": null
+  },
+  "estimates": []
+}

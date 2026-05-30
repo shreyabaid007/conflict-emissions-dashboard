@@ -1,0 +1,214 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:32:58.151509Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": [
+    {
+      "id": "0d92a236-9ff1-597c-8d56-4d5829784c59",
+      "name": "Abadan Refinery",
+      "facility_type": "REFINERY",
+      "country": "IRN",
+      "capacity_barrels": 400000.0,
+      "operator": "NIORDC \u2014 Abadan Oil Refining Company",
+      "latitude": 30.35,
+      "longitude": 48.28
+    },
+    {
+      "id": "dd0445ec-fa7b-5325-b55f-1d8535f054ad",
+      "name": "Aghajari oil field",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": 200000.0,
+      "operator": "NISOC \u2014 National Iranian South Oil Company",
+      "latitude": 30.721,
+      "longitude": 49.82
+    },
+    {
+      "id": "9a839156-a557-519e-865e-afe43b3aa1eb",
+      "name": "Aghdasieh fuel depot",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NIOPDC",
+      "latitude": 35.785,
+      "longitude": 51.493
+    },
+    {
+      "id": "ef373c6a-73ce-5b11-83c8-7302de6a6502",
+      "name": "Ahvaz / Karoon production area",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": 750000.0,
+      "operator": "NISOC \u2014 National Iranian South Oil Company",
+      "latitude": 31.005,
+      "longitude": 48.143
+    },
+    {
+      "id": "bf5dafbd-6eef-5ebf-848e-c58ef9992c46",
+      "name": "Ashdod Refinery (Paz)",
+      "facility_type": "REFINERY",
+      "country": "ISR",
+      "capacity_barrels": 120000.0,
+      "operator": "Paz Oil Company",
+      "latitude": 31.7705,
+      "longitude": 34.64600000000001
+    },
+    {
+      "id": "db1b4268-cc77-5dfe-aed5-632e2b4d8c9d",
+      "name": "Bandar Abbas naval base",
+      "facility_type": "STORAGE_TANK_FARM",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "IRGN \u2014 Islamic Republic of Iran Navy",
+      "latitude": 27.13,
+      "longitude": 56.215
+    },
+    {
+      "id": "5a3694b6-1c95-5f5f-9c0b-e8bafea949d7",
+      "name": "Bandar Abbas Refinery",
+      "facility_type": "REFINERY",
+      "country": "IRN",
+      "capacity_barrels": 330000.0,
+      "operator": "Persian Gulf Star Oil Company / NIORDC",
+      "latitude": 27.199,
+      "longitude": 56.183499999999995
+    },
+    {
+      "id": "e32ce42e-954a-5aa7-91eb-f6fda11818c5",
+      "name": "Bandar Imam Khomeini Petrochemical",
+      "facility_type": "PETROCHEMICAL",
+      "country": "IRN",
+      "capacity_barrels": 500000.0,
+      "operator": "National Petrochemical Company (NPC)",
+      "latitude": 30.437,
+      "longitude": 49.114
+    },
+    {
+      "id": "c5144660-b954-516b-9fde-b2f92fc4f734",
+      "name": "BAPCO Sitra Refinery",
+      "facility_type": "REFINERY",
+      "country": "BHR",
+      "capacity_barrels": 267000.0,
+      "operator": "Bahrain Petroleum Company (BAPCO)",
+      "latitude": 26.157999999999998,
+      "longitude": 50.617
+    },
+    {
+      "id": "093604b8-bc31-5851-9dc2-3e709990e634",
+      "name": "Fardis (Karaj) fuel depot",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NIOPDC",
+      "latitude": 35.738,
+      "longitude": 50.992
+    },
+    {
+      "id": "8843a899-5960-5efd-bcfc-41629dc08856",
+      "name": "Haifa Refineries (Bazan)",
+      "facility_type": "REFINERY",
+      "country": "ISR",
+      "capacity_barrels": 197000.0,
+      "operator": "Bazan Group",
+      "latitude": 32.788500000000006,
+      "longitude": 35.040499999999994
+    },
+    {
+      "id": "0b218b40-476c-5b21-8bc0-a2432dc91f8c",
+      "name": "Kharg Island crude export terminal",
+      "facility_type": "TANKER_TERMINAL",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NIOC \u2014 National Iranian Oil Company",
+      "latitude": 29.233,
+      "longitude": 50.31900000000001
+    },
+    {
+      "id": "c9e9436d-d772-55ff-9b61-3ad63035b0f2",
+      "name": "Lavan Island Refinery",
+      "facility_type": "REFINERY",
+      "country": "IRN",
+      "capacity_barrels": 55000.0,
+      "operator": "Lavan Oil Refining Company / NIORDC",
+      "latitude": 26.813999999999997,
+      "longitude": 53.366
+    },
+    {
+      "id": "7f5f0cc0-8914-53f1-99e2-71b6c9a27e79",
+      "name": "Masjed Soleyman oil field",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NISOC \u2014 National Iranian South Oil Company",
+      "latitude": 31.94,
+      "longitude": 49.28
+    },
+    {
+      "id": "5e4ff769-f8c2-5404-a8a5-0d2ecd5b4e8c",
+      "name": "Ras Laffan Industrial City",
+      "facility_type": "GAS_PROCESSING",
+      "country": "QAT",
+      "capacity_barrels": 1200000.0,
+      "operator": "QatarEnergy",
+      "latitude": 25.9125,
+      "longitude": 51.55
+    },
+    {
+      "id": "011d2644-0a76-57a2-aa1b-6788cf2f5bae",
+      "name": "Shahran fuel depot",
+      "facility_type": "OIL_DEPOT",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NIOPDC",
+      "latitude": 35.781,
+      "longitude": 51.31
+    },
+    {
+      "id": "aee91525-9bed-543e-9629-65e8c986d914",
+      "name": "Shahr-e Rey storage depot",
+      "facility_type": "STORAGE_TANK_FARM",
+      "country": "IRN",
+      "capacity_barrels": null,
+      "operator": "NIOPDC",
+      "latitude": 35.601,
+      "longitude": 51.443999999999996
+    },
+    {
+      "id": "904d7243-b2e8-5933-b1c7-a69fa5ecd517",
+      "name": "South Pars / Asaluyeh gas complex",
+      "facility_type": "GAS_PROCESSING",
+      "country": "IRN",
+      "capacity_barrels": 1000000.0,
+      "operator": "Multiple \u2014 Pars Oil and Gas Company (POGC)",
+      "latitude": 27.506,
+      "longitude": 52.634
+    },
+    {
+      "id": "092c58ef-2fd0-5747-b28a-453e1fd2eb05",
+      "name": "Tehran Refinery (Shahr-e Rey)",
+      "facility_type": "REFINERY",
+      "country": "IRN",
+      "capacity_barrels": 250000.0,
+      "operator": "NIORDC \u2014 Tehran Oil Refining Company",
+      "latitude": 35.58899999999999,
+      "longitude": 51.434
+    },
+    {
+      "id": "7eb58c65-bcf9-5d9b-a18f-1434390ce1ea",
+      "name": "Tehran Refinery (south tank farm)",
+      "facility_type": "STORAGE_TANK_FARM",
+      "country": "IRN",
+      "capacity_barrels": 250000.0,
+      "operator": "NIORDC \u2014 Tehran Oil Refining Company",
+      "latitude": 35.542,
+      "longitude": 51.43
+    }
+  ],
+  "pagination": {
+    "total": 20,
+    "page": 1,
+    "per_page": 200,
+    "pages": 1
+  }
+}

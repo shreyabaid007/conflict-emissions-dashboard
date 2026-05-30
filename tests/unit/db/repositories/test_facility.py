@@ -198,10 +198,13 @@ class TestInMemoryRepository:
 
 
 class TestPostgisStub:
-    def test_all_methods_not_implemented(self) -> None:
-        repo = PostgisFacilityRepository(dsn="postgresql://x/y")
-        from wced.models.facility import Facility
+    def test_upsert_delegates_to_session(self) -> None:
+        from unittest.mock import MagicMock
         from datetime import UTC, datetime
+
+        mock_session = MagicMock()
+        repo = PostgisFacilityRepository(session=mock_session)
+        from wced.models.facility import Facility
 
         f = Facility(
             name="Test",
@@ -211,13 +214,7 @@ class TestPostgisStub:
             source_url="https://example.com",
             added_at=datetime.now(UTC),
         )
-        with pytest.raises(NotImplementedError):
-            repo.upsert(f)
-        with pytest.raises(NotImplementedError):
-            repo.load_geojson()
-        with pytest.raises(NotImplementedError):
-            repo.get(f.id)
-        with pytest.raises(NotImplementedError):
-            list(repo.iter_by_country("IRN"))
-        with pytest.raises(NotImplementedError):
-            len(repo)
+        result = repo.upsert(f)
+        assert result == f.id
+        mock_session.execute.assert_called_once()
+        mock_session.flush.assert_called_once()

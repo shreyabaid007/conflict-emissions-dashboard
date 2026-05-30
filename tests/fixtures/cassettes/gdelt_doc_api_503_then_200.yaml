@@ -1,0 +1,33 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://api.gdeltproject.org/api/v2/doc/doc
+  response:
+    body:
+      string: 'Service Temporarily Unavailable'
+    headers:
+      content-type:
+      - text/html
+    status:
+      code: 503
+      message: Service Temporarily Unavailable
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://api.gdeltproject.org/api/v2/doc/doc
+  response:
+    body:
+      string: >
+        {"articles":[
+          {"url":"https://www.reuters.com/world/middle-east/explosion-isfahan-refinery-2026-03-15/","title":"Explosion reported at Isfahan oil refinery after airstrike","seendate":"20260315T120000Z","domain":"reuters.com","sourcecountylat":"32.6601","sourcecountylon":"51.6860","tone":"-5.2","sharingimage_maxlinks":"12"}
+        ]}
+    headers:
+      content-type:
+      - application/json; charset=utf-8
+    status:
+      code: 200
+      message: OK
+version: 1

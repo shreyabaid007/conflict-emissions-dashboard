@@ -49,8 +49,18 @@ DistributionKind = Literal["triangular", "normal", "uniform", "constant"]
 
 
 def _repo_root() -> Path:
-    """Repo root, assuming this file lives at <root>/wced/quantify/factors.py."""
-    return Path(__file__).resolve().parents[2]
+    """Repo root, assuming this file lives at <root>/wced/quantify/factors.py.
+
+    When the package is installed (Docker image), ``parents[2]`` is
+    ``site-packages/`` which has no ``data/``; fall back to ``/app``.
+    """
+    root = Path(__file__).resolve().parents[2]
+    if (root / "data").is_dir():
+        return root
+    container_root = Path("/app")
+    if (container_root / "data").is_dir():
+        return container_root
+    return root
 
 
 DEFAULT_EMISSION_FACTORS_PATH: Path = _repo_root() / "data" / "emission_factors.yaml"
@@ -106,6 +116,14 @@ class EmissionFactor(BaseModel):
 
     uncertainty_low: float | None = None
     uncertainty_high: float | None = None
+
+    # FacilityType.value strings (e.g. "REFINERY") this factor may legitimately
+    # be applied to. None means the factor is not facility-bound (e.g. an
+    # algorithm parameter like ``frp_extrapolation_factor``). Per CLAUDE.md
+    # "Deferred Decisions" and methodology PDF §3.4, ``quantify/inventory.py``
+    # uses this list to reject crude-oil factors applied to gas-processing
+    # facilities, which would silently produce wrong numbers.
+    applicable_facility_types: list[str] | None = None
 
     notes: str | None = None
 

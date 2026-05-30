@@ -1,0 +1,20 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:35:12.791937Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "event_id": "c925fabb-bbec-4880-acc3-4cc11a30cf14",
+  "data": {
+    "id": "a0f80d5b-4da7-423f-8809-0e74d9f2983b",
+    "event_id": "c925fabb-bbec-4880-acc3-4cc11a30cf14",
+    "facility_id": "5e4ff769-f8c2-5404-a8a5-0d2ecd5b4e8c",
+    "fraction_destroyed_low": 0.05,
+    "fraction_destroyed_mode": 0.15,
+    "fraction_destroyed_high": 0.3,
+    "assessed_by": "system_review",
+    "assessment_method": "EXPERT_ESTIMATE",
+    "notes": "v1.0.2 baseline-subtracted; pre-war p75 baseline applied",
+    "assessed_at": "2026-05-24T08:50:31.482996Z",
+    "provenance_id": "7d562a39-c214-4ad1-a952-8262ec183806"
+  }
+}

@@ -133,7 +133,7 @@ class TestConfirmed:
         assert len(store) == 1
         rec = next(iter(store._store.values()))
         assert rec.confidence_label is ConfidenceLabel.CONFIRMED
-        assert rec.parameters["n_acled_matches"] == 1
+        assert rec.parameters["n_corroboration_matches"] == 1
 
 
 class TestVerified:
@@ -281,7 +281,7 @@ class TestProvenance:
         store = InMemoryProvenanceStore()
         assign_confidence(_candidate(2), None, [], store=store)
         rec = next(iter(store._store.values()))
-        assert rec.method == "confidence_assignment_v1.0"
+        assert rec.method == "confidence_assignment_v1.1"
 
     def test_acled_event_ids_recorded_in_parameters(self) -> None:
         store = InMemoryProvenanceStore()
@@ -289,4 +289,4 @@ class TestProvenance:
         ev = _acled_match()
         assign_confidence(cand, _s2_confirmed(), [ev], store=store)
         rec = next(iter(store._store.values()))
-        assert ev.event_id_cnty in rec.parameters["acled_event_ids"]
+        assert ev.event_id_cnty in rec.parameters["corroboration_event_ids"]

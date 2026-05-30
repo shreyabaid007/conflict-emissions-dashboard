@@ -72,3 +72,8 @@ outputs/
 
 # Docker
 *.log
+
+# Build / runtime junk
+.next/
+frontend/test-results/
+.claude/scheduled_tasks.lock

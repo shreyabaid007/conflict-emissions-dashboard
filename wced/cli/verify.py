@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import UTC, datetime
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import typer
 
+from wced.models.assessment import AssessmentMethod, DamageAssessment
 from wced.models.editorial import EditorialAction, EditorialTransitionError
 from wced.models.event import EventStatus, FireEvent
 from wced.verify.editorial import InMemoryReviewQueue, PostgresReviewQueue
@@ -40,6 +42,7 @@ app = typer.Typer(
 # ---------------------------------------------------------------------------
 
 _queue: InMemoryReviewQueue | PostgresReviewQueue | None = None
+_assessments: dict[UUID, DamageAssessment] = {}
 
 
 def _get_queue() -> InMemoryReviewQueue | PostgresReviewQueue:
@@ -57,6 +60,36 @@ def _inject_queue(queue: InMemoryReviewQueue) -> None:
     """Override the queue for tests; not part of the public CLI surface."""
     global _queue
     _queue = queue
+
+
+def get_assessments() -> dict[UUID, DamageAssessment]:
+    """Return the in-memory assessment store (event_id → DamageAssessment)."""
+    return _assessments
+
+
+def _parse_fraction_destroyed(value: str) -> tuple[float, float, float]:
+    """Parse a 'low,mode,high' string into a validated triple.
+
+    Raises
+    ------
+    typer.BadParameter
+        If the string is malformed or values are out of [0, 1].
+    """
+    parts = [p.strip() for p in value.split(",")]
+    if len(parts) != 3:
+        raise typer.BadParameter(
+            f"Expected 'low,mode,high' (3 comma-separated floats); got {value!r}"
+        )
+    try:
+        low, mode, high = float(parts[0]), float(parts[1]), float(parts[2])
+    except ValueError as exc:
+        raise typer.BadParameter(f"Non-numeric value in fraction-destroyed: {exc}") from exc
+    if not (0.0 <= low <= mode <= high <= 1.0):
+        raise typer.BadParameter(
+            f"fraction-destroyed must satisfy 0 <= low <= mode <= high <= 1; "
+            f"got ({low}, {mode}, {high})"
+        )
+    return low, mode, high
 
 
 # ---------------------------------------------------------------------------
@@ -165,8 +198,27 @@ def cmd_approve(
         str | None,
         typer.Option("--notes", "-n", help="Optional approval notes."),
     ] = None,
+    fraction_destroyed: Annotated[
+        str | None,
+        typer.Option(
+            "--fraction-destroyed", "-f",
+            help="Damage assessment as 'low,mode,high' (e.g. '0.25,0.40,0.55'). "
+                 "Values in [0,1]. Creates a DamageAssessment for inventory estimation.",
+        ),
+    ] = None,
+    assessment_method: Annotated[
+        AssessmentMethod,
+        typer.Option(
+            "--assessment-method",
+            help="How the fraction-destroyed estimate was derived.",
+        ),
+    ] = AssessmentMethod.EXPERT_ESTIMATE,
 ) -> None:
-    """Approve an event and publish it to the dashboard."""
+    """Approve an event and publish it to the dashboard.
+
+    Optionally attach a DamageAssessment with --fraction-destroyed to enable
+    inventory-based emission estimation for this event.
+    """
     queue = _get_queue()
     try:
         event = queue.approve(event_id, reviewer=reviewer, notes=notes)
@@ -183,6 +235,112 @@ def cmd_approve(
     )
     if notes:
         typer.echo(f"  notes: {notes}")
+
+    if fraction_destroyed is not None:
+        low, mode, high = _parse_fraction_destroyed(fraction_destroyed)
+        assessment = DamageAssessment(
+            event_id=event_id,
+            facility_id=event.facility_id,
+            fraction_destroyed_low=low,
+            fraction_destroyed_mode=mode,
+            fraction_destroyed_high=high,
+            assessed_by=reviewer,
+            assessment_method=assessment_method,
+            notes=notes,
+            assessed_at=datetime.now(UTC),
+            provenance_id=event.provenance_id,
+        )
+        _assessments[event_id] = assessment
+        typer.echo(
+            f"  damage assessment: ψ ~ Triangular({low}, {mode}, {high}) "
+            f"[{assessment_method.value}]"
+        )
+
+
+@app.command("add-assessment")
+def cmd_add_assessment(
+    event_id: Annotated[UUID, typer.Argument(help="UUID of the event.")],
+    reviewer: Annotated[str, typer.Option("--reviewer", "-r", help="Reviewer identity.")],
+    fraction_destroyed: Annotated[
+        str,
+        typer.Option(
+            "--fraction-destroyed", "-f",
+            help="Damage assessment as 'low,mode,high' (e.g. '0.25,0.40,0.55'). Values in [0,1].",
+        ),
+    ],
+    assessment_method: Annotated[
+        AssessmentMethod,
+        typer.Option(
+            "--assessment-method",
+            help="How the fraction-destroyed estimate was derived.",
+        ),
+    ] = AssessmentMethod.EXPERT_ESTIMATE,
+    notes: Annotated[
+        str | None,
+        typer.Option("--notes", "-n", help="Optional notes."),
+    ] = None,
+) -> None:
+    """Attach a DamageAssessment to an already-PUBLISHED event.
+
+    Unlike approve (which transitions PENDING_REVIEW -> PUBLISHED), this
+    command works on events that are already PUBLISHED and only inserts a
+    damage_assessments row so inventory-based estimation can proceed.
+    """
+    low, mode, high = _parse_fraction_destroyed(fraction_destroyed)
+
+    dsn = os.environ.get("WCED_DB_DSN", "")
+    if not dsn:
+        typer.echo(
+            typer.style("✗ WCED_DB_DSN must be set for add-assessment.", fg="red"),
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    from sqlalchemy import select
+
+    from wced.db import models
+    from wced.db.repositories import DamageAssessmentRepository
+    from wced.db.session import get_engine, get_session_factory
+
+    engine = get_engine()
+    Session = get_session_factory(engine)
+    with Session() as session:
+        row = session.execute(
+            select(models.fire_events).where(models.fire_events.c.id == event_id)
+        ).first()
+        if row is None:
+            typer.echo(f"Event {event_id} not found.", err=True)
+            raise typer.Exit(code=1)
+        ev = row._asdict()
+        if ev["status"] != "PUBLISHED":
+            typer.echo(
+                f"Event {event_id} is {ev['status']}; expected PUBLISHED.",
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+        repo = DamageAssessmentRepository(session)
+        da_id = uuid4()
+        repo.insert(
+            id=da_id,
+            event_id=event_id,
+            facility_id=ev["facility_id"],
+            fraction_destroyed_low=low,
+            fraction_destroyed_mode=mode,
+            fraction_destroyed_high=high,
+            assessed_by=reviewer,
+            assessment_method=assessment_method.value,
+            notes=notes,
+            assessed_at=datetime.now(UTC),
+            provenance_id=ev["provenance_id"],
+        )
+        session.commit()
+
+    typer.echo(
+        typer.style("✓ Assessment added", fg="green", bold=True)
+        + f" — event {event_id}: ψ ~ Triangular({low}, {mode}, {high}) "
+        f"[{assessment_method.value}]"
+    )
 
 
 @app.command("reject")

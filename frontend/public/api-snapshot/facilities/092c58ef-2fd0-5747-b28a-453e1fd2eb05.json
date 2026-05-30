@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:21.497130Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "092c58ef-2fd0-5747-b28a-453e1fd2eb05",
+    "name": "Tehran Refinery (Shahr-e Rey)",
+    "facility_type": "REFINERY",
+    "country": "IRN",
+    "capacity_barrels": 250000.0,
+    "operator": "NIORDC \u2014 Tehran Oil Refining Company",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((51.429 35.584,51.439 35.584,51.439 35.594,51.429 35.594,51.429 35.584))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

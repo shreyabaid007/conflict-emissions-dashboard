@@ -34,6 +34,12 @@ T = TypeVar("T", bound=BaseModel)
 
 _STRUCTURED_TOOL_NAME = "record_structured_output"
 
+_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+_OPENROUTER_DEFAULT_HEADERS = {
+    "HTTP-Referer": "https://wced.org",
+    "X-Title": "War Carbon Emissions Dashboard",
+}
+
 
 class ClaudeCallError(RuntimeError):
     """Raised when a Claude call fails or returns an unparseable response."""
@@ -82,6 +88,7 @@ class AnthropicClient:
         client: Anthropic | None = None,
     ) -> None:
         self._settings = settings or get_settings()
+        self._provider = self._resolve_provider()
         if client is not None:
             self._client = client
         else:
@@ -90,14 +97,55 @@ class AnthropicClient:
                     "anthropic package is not installed; "
                     "install it or inject a stub client."
                 )
-            api_key = self._settings.anthropic_api_key.get_secret_value()
+            self._client = self._build_sdk_client()
+        self._last_source: Source | None = None
+
+    def _resolve_provider(self) -> str:
+        """Decide which provider to use based on settings."""
+        if self._settings.ai_provider == "openrouter":
+            return "openrouter"
+        if (
+            self._settings.ai_provider == "anthropic"
+            and not self._settings.anthropic_api_key
+            and self._settings.openrouter_api_key
+        ):
+            return "openrouter"
+        return "anthropic"
+
+    def _build_sdk_client(self) -> Anthropic:
+        """Construct the ``Anthropic`` SDK client for the resolved provider."""
+        if self._provider == "openrouter":
+            api_key = self._settings.openrouter_api_key.get_secret_value()
             if not api_key:
                 raise ClaudeCallError(
-                    "Anthropic API key is not configured "
-                    "(set WCED_ANTHROPIC_API_KEY)."
+                    "OpenRouter API key is not configured "
+                    "(set WCED_OPENROUTER_API_KEY)."
                 )
-            self._client = Anthropic(api_key=api_key)
-        self._last_source: Source | None = None
+            base_url = self._settings.ai_base_url or _OPENROUTER_BASE_URL
+            return Anthropic(
+                api_key=api_key,
+                base_url=base_url,
+                default_headers=_OPENROUTER_DEFAULT_HEADERS,
+            )
+
+        api_key = self._settings.anthropic_api_key.get_secret_value()
+        if not api_key:
+            raise ClaudeCallError(
+                "Anthropic API key is not configured "
+                "(set WCED_ANTHROPIC_API_KEY)."
+            )
+        kwargs: dict[str, Any] = {"api_key": api_key}
+        if self._settings.ai_base_url:
+            kwargs["base_url"] = self._settings.ai_base_url
+        return Anthropic(**kwargs)
+
+    def _resolve_model(self, model_id: str) -> str:
+        """Prepend ``anthropic/`` for OpenRouter when needed."""
+        if self._provider != "openrouter":
+            return model_id
+        if "/" in model_id:
+            return model_id
+        return f"anthropic/{model_id}"
 
     # ------------------------------------------------------------------ public
 
@@ -167,7 +215,8 @@ class AnthropicClient:
             A ``response_model`` instance when one was supplied, otherwise the
             assistant's concatenated text content.
         """
-        model_id = model or self._settings.anthropic_default_model
+        raw_model = model or self._settings.anthropic_default_model
+        model_id = self._resolve_model(raw_model)
         messages = self._build_messages(prompt)
         prompt_hash = _sha256_hex(json.dumps(messages, sort_keys=True, default=str))
 
@@ -223,7 +272,7 @@ class AnthropicClient:
 
         self._last_source = Source(
             source_type=SourceType.DERIVED,
-            identifier=f"claude:{model_id}:{prompt_hash}",
+            identifier=f"claude:{self._provider}:{model_id}:{prompt_hash}",
             retrieved_at=datetime.now(tz=UTC),
             retrieved_by="wced.ai.claude_client",
             content_hash=response_hash,

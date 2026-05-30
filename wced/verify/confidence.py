@@ -1,18 +1,17 @@
 """Confidence label assignment for fire candidates.
 
 Combines three independent evidence streams — FIRMS persistence, Sentinel-2
-optical classification, and ACLED armed-event corroboration — into a single
-:class:`~wced.models.provenance.ConfidenceLabel`. The label governs which
-editorial tier a ``FireEvent`` enters and propagates forward into every
-emission estimate that cites this candidate.
+optical classification, and conflict-event corroboration (ACLED or GDELT) —
+into a single :class:`~wced.models.provenance.ConfidenceLabel`. The label
+governs which editorial tier a ``FireEvent`` enters and propagates forward
+into every emission estimate that cites this candidate.
 
 Label hierarchy and evidence requirements (methodology/v1.0.pdf §4.3, Table 5):
 
   CONFIRMED  — FIRMS persistent (≥2 overpasses) + S2 confirms fire
-               + ≥1 ACLED match within space/time window.
-  VERIFIED   — FIRMS persistent + S2 confirms fire. No ACLED yet (could be
-               cloud-free confirmation without a documented conflict event, or
-               ACLED data lag).
+               + ≥1 ACLED match within space/time window (or both ACLED + GDELT).
+  VERIFIED   — FIRMS persistent + S2 confirms fire + GDELT match (no ACLED),
+               OR FIRMS persistent + S2 fire (no conflict-event match at all).
   REPORTED   — FIRMS persistent + no optical confirmation (clouds blocked S2
                or no clear-sky scene within the search window).
   SUSPECTED  — FIRMS single-overpass, no other confirmation. May be flaring,
@@ -21,11 +20,16 @@ Label hierarchy and evidence requirements (methodology/v1.0.pdf §4.3, Table 5):
                exists. Rare in this pipeline (ingested via a future news-triage
                prompt) but must be handled to avoid blocking that path.
 
-Edge case — ACLED-only: an ACLED record of a strike with no FIRMS hotspot is
-NOT auto-confirmed. The strike may have been a near-miss, or the fire may have
-been too brief or too small to register above FIRMS detection thresholds. These
-candidates are flagged SUSPECTED and routed for editorial review rather than
-being promoted automatically.
+Corroboration source strength:
+  - ACLED (human-reviewed) → strong corroboration, can reach CONFIRMED.
+  - GDELT (machine-extracted) → weak corroboration, caps at VERIFIED.
+    GDELT corroboration can never push an event above REPORTED on its own
+    because GDELT is machine-extracted, not human-reviewed.
+  - Both ACLED + GDELT → CONFIRMED (ACLED dominates).
+
+Edge case — conflict-event-only: a conflict record with no FIRMS hotspot is
+NOT auto-confirmed. These candidates are flagged SUSPECTED and routed for
+editorial review.
 
 Methodology reference: methodology/v1.0.pdf §4.3 — "Verification and
 Confidence Labels".
@@ -41,11 +45,12 @@ from wced.detect.hotspot import CandidateFireEvent
 from wced.ingest.acled import ACLEDEvent
 from wced.models.provenance import ConfidenceLabel, ProvenanceRecord
 from wced.provenance.store import ProvenanceStore
+from wced.verify.corroboration import CorroborationMatch
 from wced.verify.sentinel2_check import FireLabel, VerificationStatus, VerifiedCandidate
 
 log = logging.getLogger(__name__)
 
-_METHOD: Final[str] = "confidence_assignment_v1.0"
+_METHOD: Final[str] = "confidence_assignment_v1.1"
 
 # Persistence threshold from methodology/v1.0.pdf §3.4.
 _PERSISTENT_MIN_OVERPASSES: Final[int] = 2
@@ -78,6 +83,7 @@ def assign_confidence(
     s2_result: VerifiedCandidate | None,
     acled_matches: list[ACLEDEvent],
     *,
+    corroboration_matches: list[CorroborationMatch] | None = None,
     store: ProvenanceStore,
     produced_at: datetime | None = None,
 ) -> ConfidenceLabel:
@@ -88,60 +94,82 @@ def assign_confidence(
     candidate : CandidateFireEvent
         The clustered FIRMS candidate being evaluated.
     s2_result : VerifiedCandidate or None
-        Result of the Sentinel-2 optical check. Pass None when the check has
-        not been attempted (e.g. during rapid triage before S2 scenes are
-        available). Distinct from a result with status AWAITING_OPTICAL_CHECK,
-        though both produce the same downstream label.
+        Result of the Sentinel-2 optical check.
     acled_matches : list[ACLEDEvent]
-        Pre-filtered list from ``find_acled_corroboration``. May be empty.
+        Pre-filtered ACLED matches (backward compatibility). May be empty.
+    corroboration_matches : list[CorroborationMatch] or None
+        Source-typed corroboration matches from ``find_corroboration``.
+        When provided, these take precedence over ``acled_matches`` for
+        determining corroboration source strength.
     store : ProvenanceStore
-        Receives the ProvenanceRecord documenting this assignment so the label
-        is always auditable.
+        Receives the ProvenanceRecord.
     produced_at : datetime or None
         Wall-clock time for the ProvenanceRecord. Defaults to UTC now.
 
     Returns
     -------
     ConfidenceLabel
-        The weakest-justified label that the evidence supports. The label is
-        simultaneously recorded as a ProvenanceRecord in ``store``.
-
-    Notes
-    -----
-    The function intentionally does NOT auto-promote an ACLED-only match.
-    An armed event near a facility without a FIRMS hotspot is suspicious but
-    not confirmatory — it could be a near-miss, a non-incendiary strike, or a
-    mis-geocoded ACLED record. ``assign_confidence`` returns SUSPECTED in that
-    case and logs a warning so the editorial queue can review it.
     """
     ts = produced_at or datetime.now(tz=UTC)
     persistent = _is_persistent(candidate)
     s2_fire = _s2_confirms_fire(s2_result)
-    has_acled = len(acled_matches) > 0
+
+    # Determine corroboration strength from typed matches if available,
+    # otherwise fall back to acled_matches (backward compat).
+    has_acled = False
+    has_gdelt = False
+
+    if corroboration_matches is not None:
+        for m in corroboration_matches:
+            if m.source_type == "acled":
+                has_acled = True
+            elif m.source_type == "gdelt":
+                has_gdelt = True
+    else:
+        has_acled = len(acled_matches) > 0
+
+    has_any_corroboration = has_acled or has_gdelt
 
     # --- decision table (methodology/v1.0.pdf §4.3, Table 5) ---
+    # Extended with corroboration source distinction:
+    #   ACLED match → can reach CONFIRMED
+    #   GDELT match only → caps at VERIFIED (one tier lower)
+    #   Both → CONFIRMED (ACLED dominates)
 
     if persistent and s2_fire and has_acled:
         label = ConfidenceLabel.CONFIRMED
+    elif persistent and s2_fire and has_gdelt:
+        # GDELT corroboration caps at VERIFIED — cannot reach CONFIRMED.
+        label = ConfidenceLabel.VERIFIED
     elif persistent and s2_fire:
         label = ConfidenceLabel.VERIFIED
     elif persistent and not s2_fire:
-        # Optical check attempted + rejected/ambiguous vs. clouds/no scene:
-        # both produce REPORTED — we have ≥2 FIRMS passes, just no optics.
         label = ConfidenceLabel.REPORTED
-    elif not persistent and has_acled:
-        # ACLED-only promotion is intentionally blocked — route for review.
+    elif not persistent and has_any_corroboration:
         log.warning(
-            "assign_confidence: candidate=%s has ACLED match(es) but only "
-            "%d FIRMS overpass(es); not auto-promoting. Flag for editorial "
-            "review (possible near-miss or non-incendiary strike).",
+            "assign_confidence: candidate=%s has corroboration match(es) but "
+            "only %d FIRMS overpass(es); not auto-promoting. Flag for "
+            "editorial review (possible near-miss or non-incendiary strike).",
             candidate.id,
             candidate.n_overpasses,
         )
         label = ConfidenceLabel.SUSPECTED
     else:
-        # Single-overpass, no ACLED, no S2 fire: weakest non-claimed label.
         label = ConfidenceLabel.SUSPECTED
+
+    # Build event IDs list for provenance
+    corr_event_ids: list[str] = []
+    corr_source_types: list[str] = []
+    if corroboration_matches is not None:
+        for m in corroboration_matches:
+            corr_source_types.append(m.source_type)
+            if isinstance(m.event, ACLEDEvent):
+                corr_event_ids.append(m.event.event_id_cnty)
+            else:
+                corr_event_ids.append(m.event.event_id)
+    else:
+        corr_event_ids = [ev.event_id_cnty for ev in acled_matches]
+        corr_source_types = ["acled"] * len(acled_matches)
 
     rec = ProvenanceRecord(
         produced_by="wced.verify.confidence",
@@ -157,8 +185,11 @@ def assign_confidence(
                 else None
             ),
             "s2_confirms_fire": s2_fire,
-            "n_acled_matches": len(acled_matches),
-            "acled_event_ids": [ev.event_id_cnty for ev in acled_matches],
+            "n_corroboration_matches": len(corr_event_ids),
+            "corroboration_event_ids": corr_event_ids,
+            "corroboration_source_types": corr_source_types,
+            "has_acled": has_acled,
+            "has_gdelt": has_gdelt,
             "assigned_label": label.value,
         },
         produced_at=ts,
@@ -167,11 +198,12 @@ def assign_confidence(
     store.record_provenance(rec)
     log.info(
         "assign_confidence: candidate=%s → %s "
-        "(persistent=%s s2_fire=%s acled_matches=%d)",
+        "(persistent=%s s2_fire=%s acled=%s gdelt=%s)",
         candidate.id,
         label.value,
         persistent,
         s2_fire,
-        len(acled_matches),
+        has_acled,
+        has_gdelt,
     )
     return label

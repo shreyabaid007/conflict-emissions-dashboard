@@ -24,6 +24,7 @@ class SourceType(str, enum.Enum):
     NEWS = "NEWS"
     OFFICIAL_STATEMENT = "OFFICIAL_STATEMENT"
     ACLED = "ACLED"
+    GDELT = "GDELT"
     NGO_REPORT = "NGO_REPORT"
     ACADEMIC_PAPER = "ACADEMIC_PAPER"
     DERIVED = "DERIVED"  # output of a computation step, not a raw source

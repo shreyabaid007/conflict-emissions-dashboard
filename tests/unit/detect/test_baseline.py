@@ -47,12 +47,12 @@ def make_obs(
 
 
 class TestComputeBaselineNormal:
-    def test_median_of_uniform_observations(self) -> None:
+    def test_p75_of_uniform_observations(self) -> None:
         store = InMemoryProvenanceStore()
         frps = [10.0, 20.0, 30.0, 40.0, 50.0]
         obs = [make_obs(i + 1, frp) for i, frp in enumerate(frps)]
         b = compute_baseline(uuid4(), obs, store=store, reference_time=_T0)
-        assert b.baseline_frp_mw == pytest.approx(30.0)  # median of [10,20,30,40,50]
+        assert b.baseline_frp_mw == pytest.approx(45.0)  # p75 of [10,20,30,40,50]
         assert b.n_observations == 5
         assert b.is_fallback is False
 
@@ -65,9 +65,21 @@ class TestComputeBaselineNormal:
             reference_time=_T0,
         )
         assert b.baseline_frp_mw == pytest.approx(25.0)
-        assert b.baseline_std_mw == pytest.approx(0.0)  # pstdev of one value
+        assert b.baseline_std_mw == pytest.approx(0.0)
         assert b.n_observations == 1
         assert b.is_fallback is False
+
+    def test_robust_std_uses_iqr(self) -> None:
+        store = InMemoryProvenanceStore()
+        frps = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0]
+        obs = [make_obs(i + 1, frp) for i, frp in enumerate(frps)]
+        b = compute_baseline(uuid4(), obs, store=store, reference_time=_T0)
+        import statistics
+        sorted_vals = sorted(frps)
+        q1 = float(statistics.quantiles(sorted_vals, n=4)[0])
+        q3 = float(statistics.quantiles(sorted_vals, n=4)[2])
+        expected_std = (q3 - q1) / 1.349
+        assert b.baseline_std_mw == pytest.approx(expected_std, rel=0.01)
 
     def test_observations_outside_window_excluded(self) -> None:
         store = InMemoryProvenanceStore()
@@ -96,7 +108,7 @@ class TestComputeBaselineNormal:
         # The 200 MW observation at day 1 falls within the active event window
         # and should be excluded, leaving only [10.0, 12.0].
         assert b.n_observations == 2
-        assert b.baseline_frp_mw <= 12.0
+        assert b.baseline_frp_mw == pytest.approx(12.5)  # p75 of [10, 12]
 
     def test_provenance_emitted(self) -> None:
         store = InMemoryProvenanceStore()

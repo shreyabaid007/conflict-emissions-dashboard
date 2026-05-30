@@ -3,14 +3,18 @@
 Each facility has a characteristic background Fire Radiative Power (FRP) from
 routine industrial flaring. Refineries and gas-processing plants flare
 continuously; attributing that routine FRP to a conflict event would overstate
-emissions. This module computes the per-facility rolling 30-day median FRP and
-subtracts it from candidate FRP so only the excess is attributed.
+emissions. This module computes the per-facility rolling 30-day 75th-percentile
+FRP and subtracts it from candidate FRP so only the excess is attributed.
 
 Design notes
 ------------
 - The baseline window excludes any FRP observations that fall within a known
   active-event window, preventing a large fire from inflating the "normal"
   background.
+- We use the 75th percentile (not median) because flaring is intermittent and
+  the median underestimates the characteristic background for active refineries.
+- Baseline uncertainty uses IQR/1.349 as a robust estimator of standard
+  deviation, resistant to outliers from transient flare-ups.
 - When no historical observations exist (new facility, or first 30 days of
   operation), a fallback FacilityBaseline is returned with is_fallback=True and
   a high uncertainty standard deviation. Callers must propagate this uncertainty
@@ -65,11 +69,12 @@ class FacilityBaseline(BaseModel):
     facility_id : UUID
         Facility this baseline belongs to.
     baseline_frp_mw : float
-        Median FRP over the rolling window, in MW. Used as the "normal"
-        background level to subtract from candidate FRP.
+        75th-percentile FRP over the rolling window, in MW. Used as the
+        "normal" background level to subtract from candidate FRP.
     baseline_std_mw : float
-        Population standard deviation of FRP over the rolling window, in MW.
-        High values (≥ FALLBACK_BASELINE_STD_MW) indicate high uncertainty.
+        Robust standard deviation of FRP (IQR/1.349) over the rolling window,
+        in MW. High values (≥ FALLBACK_BASELINE_STD_MW) indicate high
+        uncertainty.
     n_observations : int
         Number of hotspot observations used in this baseline. Zero for
         fallback baselines with no historical data.
@@ -141,8 +146,9 @@ def compute_baseline(
 ) -> FacilityBaseline:
     """Compute the rolling background FRP baseline for a single Facility.
 
-    Takes the median and standard deviation of all non-active-window FRP
-    observations in the *window_days* days prior to *reference_time*.
+    Takes the 75th percentile and IQR-based robust standard deviation of all
+    non-active-window FRP observations in the *window_days* days prior to
+    *reference_time*.
 
     If no qualifying observations exist, returns a fallback FacilityBaseline
     with is_fallback=True and a high std (FALLBACK_BASELINE_STD_MW) to
@@ -197,10 +203,19 @@ def compute_baseline(
     else:
         import statistics
 
-        baseline_frp = statistics.median(qualifying)
-        baseline_std = statistics.pstdev(qualifying) if len(qualifying) > 1 else 0.0
+        sorted_vals = sorted(qualifying)
+        n = len(sorted_vals)
+        baseline_frp = float(statistics.quantiles(sorted_vals, n=4)[2]) if n >= 2 else sorted_vals[0]
+        if n >= 4:
+            q1 = float(statistics.quantiles(sorted_vals, n=4)[0])
+            q3 = baseline_frp
+            baseline_std = (q3 - q1) / 1.349
+        elif n > 1:
+            baseline_std = statistics.pstdev(qualifying)
+        else:
+            baseline_std = 0.0
         log.debug(
-            "compute_baseline: facility %s — %d obs, median=%.2f MW, std=%.2f MW",
+            "compute_baseline: facility %s — %d obs, p75=%.2f MW, robust_std=%.2f MW",
             facility_id,
             len(qualifying),
             baseline_frp,
@@ -210,7 +225,7 @@ def compute_baseline(
     rec = ProvenanceRecord(
         produced_by="wced.detect.baseline",
         inputs=[],  # derived from raw observations, not a prior ProvenanceRecord
-        method="rolling_median_baseline_v1.0",
+        method="rolling_p75_baseline_v1.0.1",
         parameters={
             "window_days": window_days,
             "n_observations_raw": len(historical_frp),

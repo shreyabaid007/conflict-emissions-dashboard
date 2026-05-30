@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:20.295782Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "904d7243-b2e8-5933-b1c7-a69fa5ecd517",
+    "name": "South Pars / Asaluyeh gas complex",
+    "facility_type": "GAS_PROCESSING",
+    "country": "IRN",
+    "capacity_barrels": 1000000.0,
+    "operator": "Multiple \u2014 Pars Oil and Gas Company (POGC)",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(52.634 27.506)",
+  "event_count": 6,
+  "total_p50_tco2e": 13579.622147223085
+}

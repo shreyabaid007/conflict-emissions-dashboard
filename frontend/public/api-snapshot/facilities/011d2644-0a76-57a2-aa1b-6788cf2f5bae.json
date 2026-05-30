@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:17.812637Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "011d2644-0a76-57a2-aa1b-6788cf2f5bae",
+    "name": "Shahran fuel depot",
+    "facility_type": "OIL_DEPOT",
+    "country": "IRN",
+    "capacity_barrels": null,
+    "operator": "NIOPDC",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POINT(51.31 35.781)",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}

@@ -1,5 +1,40 @@
 # War Carbon Emissions Dashboard — V1 Plan
 
+## Current Status (as of 2026-05-24)
+
+| Item | Status |
+|------|--------|
+| **Methodology version** | v1.0.5 live (baseline subtraction + fraction-destroyed recalibration) |
+| **Facilities in registry** | 7 Iranian oil/fuel facilities |
+| **Events detected** | 47 total |
+| **Events with estimates** | 27 (FRP-based; subset also have inventory estimates) |
+| **Reconciled events** | 2 (FRP vs. inventory within [0.5, 2.0] band) |
+| **Events needing review** | 0 |
+| **Cumulative p50** | ~75,619 tCO₂e (Iranian facilities) |
+| **Editorial workflow** | Active — `PENDING_REVIEW → PUBLISHED` with `--no-auto-publish` |
+| **Pre-war baseline data** | 12 months ingested (2025-02-28 to 2026-02-27) via `firms-historical` |
+
+**Done:**
+- Detection pipeline (FIRMS ingest → hotspot → facility match → baseline subtraction → persistence)
+- FRP-based quantification with Monte Carlo (10,000 samples)
+- Inventory-based quantification for facilities with capacity data
+- FRP/inventory reconciliation with envelope distribution
+- ACLED corroboration and confidence label assignment
+- Editorial review workflow (approve/reject/retract/add-assessment)
+- Provenance tracking end-to-end
+- FastAPI with full route set + OpenAPI docs
+- Next.js frontend with map, timeline, event detail, methodology pages
+- Docker Compose dev stack with Postgres/PostGIS, Redis, MinIO, Prefect, Grafana
+- Methodology PDF (v1.0) + 5 patch versions documented in CHANGELOG
+
+**Deferred to V2:**
+- Sentinel-2 optical damage confirmation (classifier exists, not yet in pipeline)
+- TROPOMI top-down validation (module exists, weekly batch not scheduled)
+- Building destruction / embodied carbon (SAR CCD pipeline)
+- GDELT news search integration in verification pipeline
+
+---
+
 ## TL;DR: The Best V1 Category
 
 **Target: Oil & fuel infrastructure fire emissions in Iran and the Gulf region (Feb 28, 2026 – present).**

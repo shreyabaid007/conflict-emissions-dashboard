@@ -1,0 +1,19 @@
+{
+  "methodology_version": "1.0.5",
+  "generated_at": "2026-05-24T15:37:09.683982Z",
+  "data_license": "CC-BY 4.0",
+  "attribution": "Data: NASA FIRMS, ESA Copernicus, ACLED. Analysis: WCED v1.0.5",
+  "data": {
+    "id": "c5144660-b954-516b-9fde-b2f92fc4f734",
+    "name": "BAPCO Sitra Refinery",
+    "facility_type": "REFINERY",
+    "country": "BHR",
+    "capacity_barrels": 267000.0,
+    "operator": "Bahrain Petroleum Company (BAPCO)",
+    "latitude": null,
+    "longitude": null
+  },
+  "geometry_wkt": "POLYGON((50.61 26.152,50.624 26.152,50.624 26.164,50.61 26.164,50.61 26.152))",
+  "event_count": 0,
+  "total_p50_tco2e": 0.0
+}
